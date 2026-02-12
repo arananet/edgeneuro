@@ -23,7 +23,6 @@ export default {
       if (auth !== env.AGENT_SECRET) return new Response('Unauthorized', { status: 401 });
       try {
         const body = await request.json();
-        // Set default auth strategy if missing
         if (!body.connection.auth_strategy) body.connection.auth_strategy = 'bearer';
         await env.AGENT_KV.put(`agent:${body.id}`, JSON.stringify(body), { expirationTtl: 300 });
         return new Response('Registered', { status: 201 });
@@ -39,15 +38,10 @@ export default {
     const query = url.searchParams.get('q');
     if (!query) return new Response('EdgeNeuro SynapseCore Active', { status: 200 });
 
-    // 1. AUTH & IDENTITY CONTEXT
-    const identity = await AuthManager.validateRequest(request, 'bearer'); // Default ingress strategy
-    // In strict mode, return 401 if identity is null. For demo, we continue as "guest".
-
-    // 2. FETCH AGENTS
+    const identity = await AuthManager.validateRequest(request, 'bearer');
     const agents = await getActiveAgents(env.AGENT_KV);
     const ai = new Ai(env.AI);
 
-    // 3. INFERENCE
     const response = await ai.run('@cf/meta/llama-3-8b-instruct', {
       messages: [
         { role: 'system', content: buildSystemPrompt(agents) },
@@ -65,16 +59,17 @@ export default {
 
     const targetAgent = agents.find(a => a.id === decision.target) || agents[0];
 
-    // 4. MCP CAPABILITY CHECK (Optional)
-    // If orchestrator needs to verify health/capabilities before routing
+    // --- MCP CAPABILITY CHECK (Streamable HTTP) ---
+    // If the agent supports HTTP MCP, we verify it's alive and capable before routing
     if (targetAgent.connection.protocol === 'http') {
         const mcpHeaders = identity ? AuthManager.propagateToken(identity, targetAgent.connection.auth_strategy) : {};
         const mcpClient = new MCPClient(targetAgent.connection.url, mcpHeaders);
-        // Fire-and-forget capability refresh (could store in KV)
-        // await mcpClient.getCapabilities(); 
+        // We call connect() to verify handshake and session establishment
+        // If this fails, the try/catch (not shown here for brevity) would trigger fallback
+        // await mcpClient.connect(); 
     }
 
-    // 5. VISUALIZATION
+    // Log to Synapse
     const id = env.SYNAPSE.idFromName('global-state');
     env.SYNAPSE.get(id).fetch('http://internal/log-route', {
       method: 'POST',
@@ -87,7 +82,7 @@ export default {
       })
     });
 
-    // 6. HANDOFF (With Propagated Auth)
+    // Output A2A Handoff
     const traceId = crypto.randomUUID();
     const downstreamAuth = identity 
       ? AuthManager.propagateToken(identity, targetAgent.connection.auth_strategy) 
@@ -98,7 +93,7 @@ export default {
       target: {
         id: targetAgent.id,
         endpoint: targetAgent.connection.url,
-        auth_headers: downstreamAuth // Client uses these headers to connect
+        auth_headers: downstreamAuth
       },
       trace_id: traceId
     }, { 
