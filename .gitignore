@@ -1,0 +1,27 @@
+# Node
+node_modules/
+.env
+.env.local
+.DS_Store
+
+# Build
+dist/
+.next/
+out/
+build/
+.output/
+
+# Wrangler
+.wrangler/
+wrangler.toml.bak
+
+# Terraform
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
