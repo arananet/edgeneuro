@@ -16,3 +16,6 @@ The Router MUST NOT hardcode agent capabilities. It MUST fetch available agents 
 
 ### Rule 5: Spec-Driven Changes
 All architectural changes MUST begin with a Pull Request to `.spec/` updating the relevant specification document before code is merged.
+
+### Rule 6: Skill Definition
+No Agent shall be integrated without a corresponding Skill Specification in `.spec/skills/` defining its Intent Triggers, MCP Tools, and Handoff Contract.
