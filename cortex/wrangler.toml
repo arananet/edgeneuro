@@ -5,6 +5,10 @@ compatibility_date = "2024-04-01"
 [ai]
 binding = "AI"
 
+[[kv_namespaces]]
+binding = "AGENT_KV"
+id = "todo_replace_with_real_id"
+
 [[durable_objects.bindings]]
 name = "SYNAPSE"
 class_name = "SynapseState"
