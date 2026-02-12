@@ -1,5 +1,6 @@
 import { Ai } from '@cloudflare/ai';
 import { SynapseState } from './synapse';
+import { AGENT_REGISTRY, getSystemPrompt } from './registry';
 
 export interface Env {
   AI: any;
@@ -38,50 +39,56 @@ export default {
     if (!query) return new Response('Missing query', { status: 400 });
 
     // 1. INTENT DETECTION (The "Brain")
-    const systemPrompt = `You are the Enterprise Router. Route the user query to the correct agent.
-    Available Agents:
-    - agent_hr: Payroll, holidays, benefits.
-    - agent_it: Technical support, VPN, hardware, passwords.
-    - agent_sales: CRM, leads, customer data.
-    - agent_research: General knowledge, news, stock prices.
-
-    Output JSON ONLY: {"target": "agent_name", "confidence": 0.0-1.0}`;
-
+    // Using the dynamic prompt from registry
     const response = await ai.run('@cf/meta/llama-3-8b-instruct', {
       messages: [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: getSystemPrompt() },
         { role: 'user', content: query }
       ]
     });
 
-    let routingDecision;
+    let decision;
     try {
-      // Basic JSON extraction (robust enough for MVP)
       const jsonMatch = response.response.match(/\{[\s\S]*\}/);
-      routingDecision = jsonMatch ? JSON.parse(jsonMatch[0]) : { target: 'agent_research', confidence: 0.5 };
+      decision = jsonMatch ? JSON.parse(jsonMatch[0]) : { target: 'agent_research', confidence: 0.5 };
     } catch (e) {
-      routingDecision = { target: 'agent_research', confidence: 0.0, error: 'JSON Parse Failed' };
+      decision = { target: 'agent_research', confidence: 0.0, error: 'JSON Parse Failed' };
     }
+
+    // Validate Target
+    const agentProfile = AGENT_REGISTRY[decision.target] || AGENT_REGISTRY['agent_research'];
 
     // 2. VISUALIZATION SIGNAL (Log to Synapse)
     const id = env.SYNAPSE.idFromName('global-state');
     const stub = env.SYNAPSE.get(id);
-    // Fire and forget logging (don't await strictly to keep latency low)
     stub.fetch('http://internal/log-route', {
       method: 'POST',
       body: JSON.stringify({
         timestamp: Date.now(),
         query: query,
-        ...routingDecision
+        target: agentProfile.id,
+        confidence: decision.confidence,
+        reasoning: decision.reasoning
       })
     });
 
     // 3. THE HANDOFF (Hot Potato)
+    // Strictly following docs/A2A_PROTOCOL.md
     return Response.json({
-      status: 'handoff',
-      target_agent: routingDecision.target,
-      connection_url: `wss://${routingDecision.target}.internal/v1/chat`,
-      confidence: routingDecision.confidence
+      type: "handoff",
+      target_agent: agentProfile.id,
+      connection: {
+        protocol: agentProfile.connection.protocol,
+        url: agentProfile.connection.url,
+        auth_token: "mock_jwt_token_for_demo"
+      },
+      context: {
+        intent: decision.target, // The raw intent from AI
+        confidence: decision.confidence,
+        reasoning: decision.reasoning,
+        original_query: query
+      },
+      expiry: 300 // 5 minutes validity
     }, {
       headers: { 'Access-Control-Allow-Origin': '*' }
     });
