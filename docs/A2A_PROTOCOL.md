@@ -1,57 +1,50 @@
-# Agent-to-Agent (A2A) Protocol Spec
+# Agent2Agent (A2A) Protocol Implementation 🌐
 
-**Version:** 1.0 (Draft)
-**Context:** EdgeNeuro Orchestration
+**Compliance:** A2A v1.0 (Linux Foundation)
+**Context:** EdgeNeuro Interoperability Layer
 
-## Overview
-EdgeNeuro uses a decentralized "Handoff" protocol. Agents are autonomous but must adhere to strict signaling to return control to the User or Router.
-
-## 1. The Handoff Object (Router -> Client)
-When Cortex decides on a route, it returns this JSON to the Client.
+## 1. The A2A Envelope
+All communication between Cortex and Agents MUST use the standard A2A Envelope.
 
 ```json
 {
-  "type": "handoff",
-  "target_agent": "agent_it_support",
-  "connection": {
-    "protocol": "websocket",
-    "url": "wss://agents.internal/it-support/v1/chat",
-    "auth_token": "eyJhbGciOiJIUzI1Ni..."
+  "protocol": "a2a/1.0",
+  "id": "msg_uuid_123",
+  "type": "task/handoff",
+  "source": "cortex.edgeneuro",
+  "target": "agent_hr.internal",
+  "trace_id": "trace_abc_789",
+  "payload": {
+    "task": "resolve_intent",
+    "context": {
+      "user_query": "I need a holiday",
+      "intent_classification": "request_leave",
+      "confidence": 0.98
+    }
+  }
+}
+```
+
+## 2. Handoff Mechanics (The Redirect)
+When Cortex routes a user, it returns a **Connection Instruction** following the A2A Discovery format.
+
+**Response to Client:**
+```json
+{
+  "type": "a2a/connect",
+  "target": {
+    "id": "agent_hr",
+    "endpoint": "wss://hr.internal/a2a/chat",
+    "capabilities": ["mcp/tools", "a2a/chat"]
   },
-  "context": {
-    "intent": "technical_support",
-    "confidence": 0.98,
-    "original_query": "My VPN is broken"
-  },
-  "expiry": 300
+  "auth": {
+    "token": "temporary_handoff_token",
+    "expiry": 300
+  }
 }
 ```
 
-## 2. The Recall Signal (Agent -> Client)
-When an agent completes a task or detects a query outside its domain, it MUST send this signal to the client.
-
-**Scenario A: Task Complete (Session End)**
-```json
-{
-  "type": "session_end",
-  "reason": "completed",
-  "message": "Ticket created. Is there anything else?"
-}
-```
-*Client Action:* Remain connected, wait for user input. If user input is new intent, reconnect to Cortex.
-
-**Scenario B: Out of Scope (Immediate Handoff)**
-```json
-{
-  "type": "handoff_back",
-  "reason": "out_of_scope",
-  "trigger_utterance": "What is the stock price?",
-  "suggested_intent": "market_data" 
-}
-```
-*Client Action:* IMMEDIATELY disconnect from Agent and POST the `trigger_utterance` to Cortex.
-
-## 3. MCP Compatibility
-Agents SHOULD expose their capabilities via Model Context Protocol (MCP) headers during the handshake.
-
-**Header:** `X-MCP-Capabilities: ["tools/call", "resources/read"]`
+## 3. Headers
+- `X-A2A-Version`: `1.0`
+- `X-A2A-Trace-Id`: `<uuid>`
+- `Content-Type`: `application/a2a+json`

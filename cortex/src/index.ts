@@ -6,7 +6,7 @@ export interface Env {
   AI: any;
   SYNAPSE: DurableObjectNamespace;
   AGENT_KV: KVNamespace;
-  AGENT_SECRET: string; // Set via `wrangler secret put AGENT_SECRET`
+  AGENT_SECRET: string; 
 }
 
 export { SynapseState };
@@ -15,31 +15,20 @@ export default {
   async fetch(request: Request, env: Env) {
     const url = new URL(request.url);
 
-    // --- REGISTRATION ENDPOINT (SECURE) ---
+    // --- REGISTRATION (A2A Discovery) ---
     if (request.method === 'POST' && url.pathname === '/v1/agent/register') {
       const auth = request.headers.get('X-Agent-Secret');
       if (auth !== env.AGENT_SECRET) return new Response('Unauthorized', { status: 401 });
 
       try {
         const body = await request.json();
-        // Validation (Spec 002)
-        if (!body.id || !body.domain || !body.connection) {
-          return new Response('Invalid Agent Schema', { status: 400 });
-        }
-
-        // Store in KV with TTL (Heartbeat)
-        await env.AGENT_KV.put(`agent:${body.id}`, JSON.stringify(body), { expirationTtl: 300 });
+        if (!body.id || !body.domain) return new Response('Invalid A2A Profile', { status: 400 });
         
-        return new Response('Registered', { status: 201 });
+        await env.AGENT_KV.put(`agent:${body.id}`, JSON.stringify(body), { expirationTtl: 300 });
+        return new Response('A2A Registration Accepted', { status: 201 });
       } catch (e) {
         return new Response('Bad Request', { status: 400 });
       }
-    }
-
-    // --- ADMIN LIST ---
-    if (url.pathname === '/v1/agent/list') {
-      const agents = await getActiveAgents(env.AGENT_KV);
-      return Response.json(agents);
     }
 
     // --- ROUTER LOGIC ---
@@ -49,13 +38,11 @@ export default {
     }
 
     const query = url.searchParams.get('q');
-    if (!query) return new Response('EdgeNeuro Cortex Active', { status: 200 });
+    if (!query) return new Response('EdgeNeuro A2A Node Active', { status: 200 });
 
-    // 1. Fetch Dynamic Agents
     const agents = await getActiveAgents(env.AGENT_KV);
     const ai = new Ai(env.AI);
 
-    // 2. Inference
     const response = await ai.run('@cf/meta/llama-3-8b-instruct', {
       messages: [
         { role: 'system', content: buildSystemPrompt(agents) },
@@ -68,13 +55,12 @@ export default {
       const jsonMatch = response.response.match(/\{[\s\S]*\}/);
       decision = jsonMatch ? JSON.parse(jsonMatch[0]) : { target: 'agent_fallback', confidence: 0.0 };
     } catch (e) {
-      decision = { target: 'agent_fallback', confidence: 0.0, error: 'JSON Parse Failed' };
+      decision = { target: 'agent_fallback', confidence: 0.0 };
     }
 
-    // 3. Resolve Connection Details
     const targetAgent = agents.find(a => a.id === decision.target) || agents[0];
 
-    // 4. Log to Synapse
+    // Log to Synapse
     const id = env.SYNAPSE.idFromName('global-state');
     env.SYNAPSE.get(id).fetch('http://internal/log-route', {
       method: 'POST',
@@ -83,20 +69,30 @@ export default {
         query,
         target: targetAgent.id,
         confidence: decision.confidence,
-        reasoning: decision.reasoning
+        protocol: "a2a/1.0"
       })
     });
 
+    // Output A2A Envelope
+    const traceId = crypto.randomUUID();
     return Response.json({
-      type: "handoff",
-      target_agent: targetAgent.id,
-      connection: targetAgent.connection,
-      context: {
-        intent: decision.target,
-        confidence: decision.confidence,
-        original_query: query
+      type: "a2a/connect", // Official Handoff Signal
+      target: {
+        id: targetAgent.id,
+        endpoint: targetAgent.connection.url,
+        capabilities: targetAgent.metadata?.capabilities || []
       },
-      expiry: 300
-    }, { headers: { 'Access-Control-Allow-Origin': '*' } });
+      auth: {
+        token: "mock_handoff_token",
+        expiry: 300
+      },
+      trace_id: traceId
+    }, { 
+      headers: { 
+        'Access-Control-Allow-Origin': '*',
+        'X-A2A-Version': '1.0',
+        'X-A2A-Trace-Id': traceId
+      } 
+    });
   }
 };
