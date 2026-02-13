@@ -1,222 +1,193 @@
 import { useState, useEffect } from 'react'
 
-interface OAuthProvider {
+interface ModelConfig {
   id: string
   name: string
-  client_id: string
-  client_secret?: string
-  auth_url: string
-  token_url: string
-  userinfo_url?: string
-  scopes: string
-  enabled: number
+  base_model: string
+  lora_id?: string
+  enabled: boolean
+  is_default: boolean
 }
+
+const AVAILABLE_MODELS = [
+  { id: 'llama-3.2-1b', name: 'Llama 3.2 1B', description: 'Fastest, lowest latency' },
+  { id: 'llama-3.2-3b', name: 'Llama 3.2 3B', description: 'Balanced speed/accuracy' },
+  { id: 'llama-3.1-8b', name: 'Llama 3.1 8B', description: 'Higher accuracy' },
+  { id: 'gemma-2-27b', name: 'Gemma 2 27B', description: 'Best accuracy, slower' },
+]
 
 const ORCHESTRATOR_URL = 'https://edgeneuro-synapse-core.info-693.workers.dev'
 const AGENT_SECRET = 'potato123'
 
-// Default provider configs
-const PROVIDER_TEMPLATES = {
-  google: {
-    id: 'google',
-    name: 'Google',
-    auth_url: 'https://accounts.google.com/o/oauth2/v2/auth',
-    token_url: 'https://oauth2.googleapis.com/token',
-    userinfo_url: 'https://www.googleapis.com/oauth2/v2/userinfo',
-    scopes: JSON.stringify(['openid', 'email', 'profile'])
-  },
-  microsoft: {
-    id: 'microsoft',
-    name: 'Microsoft Entra ID',
-    auth_url: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
-    token_url: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-    userinfo_url: 'https://graph.microsoft.com/v1.0/me',
-    scopes: JSON.stringify(['openid', 'email', 'profile', 'User.Read'])
-  },
-  okta: {
-    id: 'okta',
-    name: 'Okta',
-    auth_url: '',
-    token_url: '',
-    userinfo_url: '',
-    scopes: JSON.stringify(['openid', 'profile', 'email'])
-  }
-}
-
 export default function Settings() {
-  const [providers, setProviders] = useState<OAuthProvider[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [formData, setFormData] = useState<Partial<OAuthProvider>>({
-    id: '',
-    name: '',
-    client_id: '',
-    client_secret: '',
-    auth_url: '',
-    token_url: '',
-    userinfo_url: '',
-    scopes: '',
-    enabled: true
-  })
-
-  const loadProviders = () => {
-    setLoading(true)
-    fetch(`${ORCHESTRATOR_URL}/v1/oauth/providers`)
-      .then(res => res.json())
-      .then(data => setProviders(data.providers || []))
-      .catch(() => setProviders([]))
-      .finally(() => setLoading(false))
-  }
+  const [activeTab, setActiveTab] = useState<'models' | 'oauth'>('models')
+  const [models, setModels] = useState<ModelConfig[]>([])
+  const [selectedModel, setSelectedModel] = useState('')
 
   useEffect(() => {
-    loadProviders()
+    // Load saved config
+    const saved = localStorage.getItem('model_config')
+    if (saved) {
+      const config = JSON.parse(saved)
+      setModels(config.models || [])
+      setSelectedModel(config.active || 'llama-3.2-1b')
+    } else {
+      setSelectedModel('llama-3.2-1b')
+    }
   }, [])
 
-  const handleTemplate = (template: keyof typeof PROVIDER_TEMPLATES) => {
-    const t = PROVIDER_TEMPLATES[template]
-    setFormData({
-      ...t,
-      scopes: typeof t.scopes === 'string' ? t.scopes : JSON.stringify(t.scopes),
-      client_id: '',
-      client_secret: '',
-      enabled: true
-    })
-    setShowForm(true)
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    try {
-      await fetch(`${ORCHESTRATOR_URL}/v1/oauth/provider`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Agent-Secret': AGENT_SECRET
-        },
-        body: JSON.stringify(formData)
-      })
-      setShowForm(false)
-      setFormData({ id: '', name: '', client_id: '', client_secret: '', auth_url: '', token_url: '', userinfo_url: '', scopes: '', enabled: true })
-      loadProviders()
-    } catch (e) {
-      alert('Failed to save provider')
-    }
-  }
-
-  const testLogin = async (providerId: string) => {
-    const redirectUri = `${window.location.origin}/oauth/callback`
-    try {
-      const res = await fetch(`${ORCHESTRATOR_URL}/v1/oauth/login?provider=${providerId}&redirect_uri=${encodeURIComponent(redirectUri)}`)
-      const data = await res.json()
-      if (data.auth_url) {
-        window.location.href = data.auth_url
-      } else {
-        alert(data.error || 'Failed to get login URL')
-      }
-    } catch (e) {
-      alert('Failed to initiate login')
-    }
+  const handleModelSelect = (modelId: string) => {
+    setSelectedModel(modelId)
+    localStorage.setItem('model_config', JSON.stringify({
+      models,
+      active: modelId
+    }))
   }
 
   return (
     <div>
+      {/* Model Selection */}
       <div className="card">
         <div className="card-header">
-          <h3 className="card-title">OAuth Providers</h3>
-          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-            {showForm ? 'Cancel' : '+ Add Provider'}
+          <h3 className="card-title">AI Model Configuration</h3>
+        </div>
+        
+        <p style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
+          Select the model used for intent classification and routing. Smaller models are faster but less accurate.
+        </p>
+
+        <div className="form-group">
+          <label className="form-label">Active Model</label>
+          <select 
+            className="form-select"
+            value={selectedModel}
+            onChange={e => handleModelSelect(e.target.value)}
+          >
+            {AVAILABLE_MODELS.map(m => (
+              <option key={m.id} value={m.id}>{m.name} - {m.description}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ marginTop: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '6px' }}>
+          <h4 style={{ margin: '0 0 10px', fontSize: '14px' }}>Current Configuration</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '13px' }}>
+            <div>
+              <span style={{ color: '#666' }}>Base Model:</span>
+              <code style={{ marginLeft: '8px' }}>@cf/meta/{selectedModel}-instruct</code>
+            </div>
+            <div>
+              <span style={{ color: '#666' }}>Fine-tuned:</span>
+              <span style={{ marginLeft: '8px' }}>{models.find(m => m.id === selectedModel)?.lora_id || 'None'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Available Models */}
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-title">Available Models</h3>
+        </div>
+
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Description</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {AVAILABLE_MODELS.map(m => (
+              <tr key={m.id}>
+                <td><strong>{m.name}</strong></td>
+                <td>{m.description}</td>
+                <td>
+                  {selectedModel === m.id ? (
+                    <span className="badge badge-success">Active</span>
+                  ) : (
+                    <button 
+                      className="btn btn-secondary"
+                      style={{ padding: '4px 8px', fontSize: '11px' }}
+                      onClick={() => handleModelSelect(m.id)}
+                    >
+                      Select
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* LoRA Adapters */}
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-title">Fine-Tuned LoRA Adapters</h3>
+        </div>
+
+        <p style={{ marginBottom: '15px', color: 'var(--text-secondary)' }}>
+          Upload custom LoRA adapters for domain-specific intent classification.
+        </p>
+
+        <div style={{ padding: '20px', border: '2px dashed #ddd', borderRadius: '6px', textAlign: 'center' }}>
+          <p style={{ color: '#666', marginBottom: '10px' }}>Drag & drop LoRA adapter files here</p>
+          <p style={{ fontSize: '12px', color: '#999' }}>Supported: .safetensors + adapter_config.json</p>
+          <button className="btn btn-secondary" style={{ marginTop: '10px' }}>
+            Browse Files
           </button>
         </div>
 
-        {/* Quick Templates */}
-        {!showForm && (
-          <div style={{ marginBottom: '20px' }}>
-            <p style={{ fontSize: '13px', color: '#666', marginBottom: '10px' }}>Quick start with:</p>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button className="btn btn-secondary" onClick={() => handleTemplate('google')}>Google</button>
-              <button className="btn btn-secondary" onClick={() => handleTemplate('microsoft')}>Microsoft Entra ID</button>
-              <button className="btn btn-secondary" onClick={() => handleTemplate('okta')}>Okta</button>
-            </div>
-          </div>
-        )}
-
-        {showForm && (
-          <form onSubmit={handleSubmit} style={{ marginBottom: '20px', padding: '15px', background: 'var(--background)', borderRadius: '6px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-              <div className="form-group">
-                <label className="form-label">Provider ID</label>
-                <input className="form-input" value={formData.id} onChange={e => setFormData({...formData, id: e.target.value})} placeholder="google, microsoft, okta" required disabled={!!PROVIDER_TEMPLATES[formData.id as keyof typeof PROVIDER_TEMPLATES]} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Display Name</label>
-                <input className="form-input" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Google" required />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Client ID</label>
-                <input className="form-input" value={formData.client_id} onChange={e => setFormData({...formData, client_id: e.target.value})} placeholder="Your OAuth Client ID" required />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Client Secret</label>
-                <input className="form-input" type="password" value={formData.client_secret} onChange={e => setFormData({...formData, client_secret: e.target.value})} placeholder="Your OAuth Client Secret" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Auth URL</label>
-                <input className="form-input" value={formData.auth_url} onChange={e => setFormData({...formData, auth_url: e.target.value})} placeholder="https://accounts.google.com/o/oauth2/v2/auth" required />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Token URL</label>
-                <input className="form-input" value={formData.token_url} onChange={e => setFormData({...formData, token_url: e.target.value})} placeholder="https://oauth2.googleapis.com/token" required />
-              </div>
-              <div className="form-group">
-                <label className="form-label">UserInfo URL</label>
-                <input className="form-input" value={formData.userinfo_url} onChange={e => setFormData({...formData, userinfo_url: e.target.value})} placeholder="https://www.googleapis.com/oauth2/v2/userinfo" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Scopes (comma separated)</label>
-                <input className="form-input" value={formData.scopes} onChange={e => setFormData({...formData, scopes: e.target.value})} placeholder="openid, email, profile" />
-              </div>
-            </div>
-            <button type="submit" className="btn btn-success" style={{ marginTop: '10px' }}>Save Provider</button>
-          </form>
-        )}
-
-        {loading ? (
-          <p>Loading...</p>
-        ) : providers.length === 0 ? (
-          <p>No OAuth providers configured. Add one to enable social login.</p>
-        ) : (
-          <table className="table">
+        {models.filter(m => m.lora_id).length > 0 && (
+          <table className="table" style={{ marginTop: '15px' }}>
             <thead>
               <tr>
-                <th>Provider</th>
-                <th>Client ID</th>
-                <th>Status</th>
+                <th>Name</th>
+                <th>Base Model</th>
+                <th>LoRA ID</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {providers.map(p => (
-                <tr key={p.id}>
-                  <td>{p.name}</td>
-                  <td><code>{p.client_id}</code></td>
+              {models.filter(m => m.lora_id).map(m => (
+                <tr key={m.id}>
+                  <td>{m.name}</td>
+                  <td>{m.base_model}</td>
+                  <td><code>{m.lora_id}</code></td>
                   <td>
-                    {p.enabled ? (
-                      <span className="badge badge-success">Enabled</span>
-                    ) : (
-                      <span className="badge" style={{ background: '#f8d7da', color: '#721c24' }}>Disabled</span>
-                    )}
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '5px' }}>
-                      <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => testLogin(p.id)}>Test Login</button>
-                    </div>
+                    <button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: '11px' }}>
+                      Test
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* AI Gateway Status */}
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-title">AI Gateway</h3>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+          <div style={{ padding: '15px', background: '#f8f9fa', borderRadius: '6px', textAlign: 'center' }}>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0066cc' }}>-</div>
+            <div style={{ fontSize: '12px', color: '#666' }}>Requests Today</div>
+          </div>
+          <div style={{ padding: '15px', background: '#f8f9fa', borderRadius: '6px', textAlign: 'center' }}>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#28a745' }}>-</div>
+            <div style={{ fontSize: '12px', color: '#666' }}>Avg Latency</div>
+          </div>
+          <div style={{ padding: '15px', background: '#f8f9fa', borderRadius: '6px', textAlign: 'center' }}>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0066cc' }}>0%</div>
+            <div style={{ fontSize: '12px', color: '#666' }}>Cache Hit</div>
+          </div>
+        </div>
       </div>
     </div>
   )
