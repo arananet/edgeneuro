@@ -7,7 +7,7 @@ binding = "AI"
 
 [[kv_namespaces]]
 binding = "AGENT_KV"
-id = "todo_replace_with_real_id"
+id = "30132360c6984b01a9e165955b76ce78"
 
 [[durable_objects.bindings]]
 name = "SYNAPSE"
@@ -15,4 +15,4 @@ class_name = "SynapseState"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["SynapseState"]
+new_sqlite_classes = ["SynapseState"]
