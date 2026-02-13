@@ -216,8 +216,8 @@
           <input type="url" id="mcp-url" placeholder="https://agent.example.com/mcp">
         </div>
         <div class="form-group">
-          <label>Authorization (optional)</label>
-          <input type="text" id="mcp-auth" placeholder="Bearer token">
+          <label>Agent Secret (required for proxy)</label>
+          <input type="password" id="mcp-secret" placeholder="Enter your AGENT_SECRET">
         </div>
         <button onclick="runMCPTest()">Validate</button>
         <div class="results" id="mcp-results"></div>
@@ -263,7 +263,9 @@
       
       // Use proxy to bypass CORS
       const proxyUrl = `${window.location.origin}/proxy-mcp?url=${encodeURIComponent(url)}`;
+      const secret = document.getElementById('mcp-secret').value;
       const headers = { 'Content-Type': 'application/json' };
+      if (secret) headers['X-Agent-Secret'] = secret;
       if (auth) headers['Authorization'] = auth.startsWith('Bearer') ? auth : `Bearer ${auth}`;
       
       try {

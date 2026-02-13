@@ -15,8 +15,31 @@ export default {
   async fetch(request: Request, env: Env) {
     const url = new URL(request.url);
 
-    // --- PROXY: MCP TEST (bypass CORS) ---
-    if (url.pathname === '/proxy-mcp' && request.method === 'POST') {
+    // --- PROXY: MCP TEST (bypass CORS) - SECURED ---
+    if (url.pathname === '/proxy-mcp') {
+      // Handle CORS preflight
+      if (request.method === 'OPTIONS') {
+        return new Response(null, {
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST',
+            'Access-Control-Allow-Headers': 'Content-Type, X-Agent-Secret',
+          }
+        });
+      }
+      
+      if (request.method !== 'POST') {
+        return Response.json({ error: 'Method not allowed' }, { status: 405 });
+      }
+      
+      // Require auth for proxy
+      const auth = request.headers.get('X-Agent-Secret');
+      if (auth !== env.AGENT_SECRET) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 }, {
+          headers: { 'Access-Control-Allow-Origin': '*' }
+        });
+      }
+      
       const targetUrl = url.searchParams.get('url');
       if (!targetUrl) return Response.json({ error: 'Missing url param' }, { status: 400 });
       
@@ -32,7 +55,9 @@ export default {
           body,
         });
         
-        const headers: Record<string, string> = {};
+        const headers: Record<string, string> = {
+          'Access-Control-Allow-Origin': '*'
+        };
         proxyRes.headers.forEach((v, k) => {
           if (['content-type', 'mcp-session-id', 'mcp-protocol-version'].includes(k)) {
             headers[k] = v;
