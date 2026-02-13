@@ -3,15 +3,13 @@
 export interface AgentProfile {
   id: string;
   name: string;
-  domain: string[];
+  description?: string;
+  intent_triggers?: string[];  // Matches registration
+  capabilities?: string[];     // Matches registration
   connection: {
     protocol: 'websocket' | 'http' | 'a2a';
     url: string;
     auth_strategy: 'oauth2' | 'mtls' | 'bearer' | 'api_key'; // New Field
-  };
-  metadata?: {
-    version: string;
-    capabilities: string[];
   };
 }
 
@@ -19,13 +17,12 @@ export const FALLBACK_AGENTS: AgentProfile[] = [
   {
     id: 'agent_fallback',
     name: 'General Support',
-    domain: ['general_help', 'unknown_query'],
+    intent_triggers: ['general', 'help', 'other'],
     connection: {
       protocol: 'http',
       url: 'https://support.internal',
       auth_strategy: 'bearer',
     },
-    metadata: { version: '1.0', capabilities: ['basic_chat'] },
   },
 ];
 
@@ -49,14 +46,17 @@ export async function getActiveAgents(
 
 export function buildSystemPrompt(agents: AgentProfile[]): string {
   const agentDesc = agents
-    .map((a) => `- ${a.id} (${a.name}): [${a.domain.join(', ')}]`)
+    .map((a) => {
+      const triggers = a.intent_triggers?.join(', ') || a.capabilities?.join(', ') || 'general';
+      return `- ${a.id} (${a.name}): handles [${triggers}]`;
+    })
     .join('\n');
   return `You are the EdgeNeuro SynapseCore. Route the task to the correct peer.
   
-  Active A2A Peers:
+  Active Agents:
   ${agentDesc}
   
   Rules:
-  1. Only choose from the list above.
-  2. Output strict JSON only.`;
+  1. Only choose from the agents above.
+  2. Output strict JSON: {"target": "agent_id", "confidence": 0.0-1.0, "reason": "..."}`;
 }
