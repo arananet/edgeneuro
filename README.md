@@ -1,11 +1,7 @@
 # EdgeNeuro 🧠
 **Enterprise-Grade Serverless Orchestrator**
 
-![EdgeNeuro Logo](./docs/assets/logo_placeholder.png)
-<!--
-   **Logo Generation Prompt (Nano Banana / Stable Diffusion):**
-   "Cyberpunk neural network synapse connecting distinct AI nodes, dark mode, neon blue and purple, ultra detailed, vector style, white background."
--->
+![EdgeNeuro Logo](./docs/assets/logo.svg)
 
 EdgeNeuro is a "Hot Potato" architecture orchestrator built on Cloudflare Workers (SynapseCore), Workers AI (Llama-3), and Durable Objects. It acts as an **Edge Router**, classifying user intent in <50ms and handing off connections directly to specialized agents.
 
