@@ -4,28 +4,18 @@ interface LoginProps {
   onLogin: (token: string, user: string) => void
 }
 
-const ORCHESTRATOR_URL = 'https://edgeneuro-synapse-core.info-693.workers.dev'
-
 export default function Login({ onLogin }: LoginProps) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [oauthProviders, setOauthProviders] = useState<{id: string, name: string}[]>([])
-
-  useEffect(() => {
-    // Load OAuth providers
-    fetch(`${ORCHESTRATOR_URL}/v1/oauth/providers`)
-      .then(res => res.json())
-      .then(data => setOauthProviders(data.providers || []))
-      .catch(() => {})
-  }, [])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
 
+    // Demo users - in production, this would validate against D1
     const users: Record<string, string> = {
       'admin': 'admin123',
       'eduardo': 'edu123',
@@ -43,21 +33,6 @@ export default function Login({ onLogin }: LoginProps) {
     setLoading(false)
   }
 
-  const handleOAuthLogin = async (providerId: string) => {
-    const redirectUri = `${window.location.origin}/oauth/callback`
-    try {
-      const res = await fetch(`${ORCHESTRATOR_URL}/v1/oauth/login?provider=${providerId}&redirect_uri=${encodeURIComponent(redirectUri)}`)
-      const data = await res.json()
-      if (data.auth_url) {
-        window.location.href = data.auth_url
-      } else {
-        setError(data.error || 'Failed to initiate OAuth')
-      }
-    } catch (e) {
-      setError('Failed to connect to OAuth provider')
-    }
-  }
-
   return (
     <div className="login-container">
       <div className="login-box">
@@ -73,24 +48,6 @@ export default function Login({ onLogin }: LoginProps) {
           <p style={{ color: '#666', margin: '5px 0 0', fontSize: '14px' }}>Control Plane</p>
         </div>
         
-        {/* OAuth Buttons */}
-        {oauthProviders.length > 0 && (
-          <div style={{ marginBottom: '20px' }}>
-            {oauthProviders.map(p => (
-              <button
-                key={p.id}
-                type="button"
-                className="btn btn-secondary"
-                style={{ width: '100%', marginBottom: '8px' }}
-                onClick={() => handleOAuthLogin(p.id)}
-              >
-                Continue with {p.name}
-              </button>
-            ))}
-            <div style={{ textAlign: 'center', color: '#999', margin: '10px 0', fontSize: '12px' }}>or</div>
-          </div>
-        )}
-        
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label">Username</label>
@@ -100,6 +57,7 @@ export default function Login({ onLogin }: LoginProps) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter username"
+              required
             />
           </div>
           <div className="form-group">
@@ -110,6 +68,7 @@ export default function Login({ onLogin }: LoginProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter password"
+              required
             />
           </div>
           {error && <p style={{ color: '#dc3545', marginBottom: '15px', fontSize: '14px' }}>{error}</p>}
@@ -122,6 +81,7 @@ export default function Login({ onLogin }: LoginProps) {
           <p style={{ margin: '0 0 5px', fontWeight: '600' }}>Demo Accounts:</p>
           <p style={{ margin: '2px 0' }}>admin / admin123</p>
           <p style={{ margin: '2px 0' }}>eduardo / edu123</p>
+          <p style={{ margin: '2px 0' }}>operator / operator123</p>
         </div>
       </div>
     </div>
