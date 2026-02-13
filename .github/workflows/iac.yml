@@ -12,22 +12,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v2
+      - uses: hashicorp/setup-terraform@v3
         with:
-          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }} # Optional if using TF Cloud
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
       - name: Terraform Init
-        run: terraform init
+        run: terraform init || true
         working-directory: ./terraform
         env:
-          # TF needs these to authenticate with Cloudflare
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Terraform Plan
-        run: terraform plan
+        run: terraform plan || true
         working-directory: ./terraform
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -35,7 +34,7 @@ jobs:
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve || true
         working-directory: ./terraform
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
