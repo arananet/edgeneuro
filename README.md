@@ -1,6 +1,6 @@
 # EdgeNeuro 🧠
 
-**Enterprise-Grade Serverless Orchestrator**
+**Enterprise-Grade Serverless Intent Detection Router**
 
 ![EdgeNeuro Logo](./docs/assets/logo.svg)
 
