@@ -46,21 +46,29 @@ export default {
     const identity = await AuthManager.validateRequest(request, 'bearer');
     const agents = await getActiveAgents(env.AGENT_KV);
 
-    const response = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
-      messages: [
-        { role: 'system', content: buildSystemPrompt(agents) },
-        { role: 'user', content: query },
-      ],
-    });
+    // Fallback if AI not available (beta)
+    let decision = { target: 'agent_fallback', confidence: 0.0 };
+    
+    if (env.AI) {
+      try {
+        const response = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+          messages: [
+            { role: 'system', content: buildSystemPrompt(agents) },
+            { role: 'user', content: query },
+          ],
+        });
 
-    let decision;
-    try {
-      const jsonMatch = response.response.match(/\{[\s\S]*\}/);
-      decision = jsonMatch
-        ? JSON.parse(jsonMatch[0])
-        : { target: 'agent_fallback', confidence: 0.0 };
-    } catch (e) {
-      decision = { target: 'agent_fallback', confidence: 0.0 };
+        try {
+          const jsonMatch = response.response.match(/\{[\s\S]*\}/);
+          decision = jsonMatch
+            ? JSON.parse(jsonMatch[0])
+            : { target: 'agent_fallback', confidence: 0.0 };
+        } catch (e) {
+          console.error('AI Parse Error:', e);
+        }
+      } catch (e) {
+        console.error('AI Error:', e);
+      }
     }
 
     const targetAgent =
