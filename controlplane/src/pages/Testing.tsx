@@ -47,13 +47,41 @@ export default function Testing() {
           }
         })
       })
-      const data = await res.json()
+      
+      const contentType = res.headers.get('content-type') || ''
+      let data: any
+      
+      if (contentType.includes('text/event-stream')) {
+        // Handle SSE response
+        const text = await res.text()
+        // Parse SSE format: "data: {...}\n\n"
+        const lines = text.split('\n')
+        let jsonStr = ''
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            jsonStr = line.slice(6)
+            break
+          }
+        }
+        try {
+          data = JSON.parse(jsonStr)
+        } catch {
+          data = { raw: text, format: 'sse' }
+        }
+      } else {
+        // Handle JSON response
+        const text = await res.text()
+        try {
+          data = JSON.parse(text)
+        } catch {
+          data = { raw: text, error: 'Invalid JSON' }
+        }
+      }
+      
       setResult({
         status: res.status,
-        headers: {
-          'mcp-session-id': res.headers.get('mcp-session-id')
-        },
-        body: data
+        contentType,
+        ...data
       })
     } catch (e: any) {
       setResult({ error: e.message })
@@ -112,7 +140,7 @@ export default function Testing() {
             <h3 className="card-title">MCP Client Test</h3>
           </div>
           <p style={{ marginBottom: '15px', color: 'var(--text-secondary)' }}>
-            Test an MCP server endpoint (proxied through orchestrator).
+            Test an MCP server endpoint (proxied through orchestrator). Supports both JSON and SSE responses.
           </p>
           <div className="form-group">
             <label className="form-label">MCP Endpoint URL</label>
