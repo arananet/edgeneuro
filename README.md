@@ -76,6 +76,26 @@ This architecture is based on the latest research in multi-agent orchestration:
 
 ---
 
+## Comparison with Other Orchestrators
+
+| Feature | EdgeNeuro | Microsoft Copilot | IBM Watsonx Orchestrate | AutoGen |
+|---------|-----------|-------------------|------------------------|---------|
+| **Deployment** | Edge (Cloudflare Workers) | Centralized Cloud | Centralized Cloud | Self-hosted |
+| **Architecture** | Stateless "Hot Potato" | Stateful Proxy | Stateful Proxy | Stateful Proxy |
+| **Intent Detection** | Fine-tuned SLM (<50ms) | Generic LLM | Generic LLM | Custom LLM |
+| **Protocols** | A2A + MCP | Proprietary | Proprietary | MCP (partial) |
+| **Scaling** | Infinite (ephemeral) | Limited by cloud | Limited by cloud | Limited by infra |
+| **Source** | Open Source | Proprietary | Proprietary | Open Source |
+| **Cost** | Pay-per-request | Enterprise license | Enterprise license | Infrastructure |
+
+**Key Differentiators:**
+- **Edge-First:** Runs on Cloudflare's global network, closest to users.
+- **Hot Potato Pattern:** Router introduces client to agent and leaves; no proxy bottleneck.
+- **Standards-Based:** Built on A2A and MCP for interoperability.
+- **Fine-tuned SLM:** Uses small models optimized for routing intent, not general conversation.
+
+---
+
 ## Spec-Driven Development
 
 This project follows **GitHub Spec Kit**. See `.spec/` for immutable rules and technical specifications.
