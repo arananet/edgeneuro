@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Agents from './pages/Agents'
+import Discovery from './pages/Discovery'
 import Testing from './pages/Testing'
 import Evaluation from './pages/Evaluation'
 import Layout from './components/Layout'
@@ -41,6 +42,7 @@ function App() {
           <Route path="/" element={<Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/agents" element={<Agents />} />
+          <Route path="/discovery" element={<Discovery />} />
           <Route path="/testing" element={<Testing />} />
           <Route path="/evaluation" element={<Evaluation />} />
         </Routes>

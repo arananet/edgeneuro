@@ -12,6 +12,7 @@ interface Agent {
   capabilities?: string[]
   intent_triggers?: string[]
   approved?: boolean
+  discovered_at?: string
 }
 
 const ORCHESTRATOR_URL = 'https://edgeneuro-synapse-core.info-693.workers.dev'
@@ -29,6 +30,8 @@ export default function Agents() {
     auth_strategy: 'bearer',
     triggers: ''
   })
+  const [testResult, setTestResult] = useState<any>(null)
+  const [testing, setTesting] = useState(false)
 
   const loadAgents = () => {
     setLoading(true)
@@ -51,13 +54,50 @@ export default function Agents() {
   }
 
   const handleDiscover = async (url: string) => {
+    setTesting(true)
+    setTestResult(null)
     try {
       const res = await fetch(`${ORCHESTRATOR_URL}/v1/discover?url=${encodeURIComponent(url)}`)
       const data = await res.json()
-      alert(`MCP Supported: ${data.mcpSupported}\nCapabilities: ${JSON.stringify(data.capabilities, null, 2)}`)
+      setTestResult({ type: 'discovery', success: data.mcpSupported, data })
     } catch (e: any) {
-      alert(`Error: ${e.message}`)
+      setTestResult({ type: 'discovery', success: false, error: e.message })
     }
+    setTesting(false)
+  }
+
+  const handleTestAuth = async () => {
+    if (!formData.url) {
+      setTestResult({ type: 'auth', success: false, error: 'Enter URL first' })
+      return
+    }
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await fetch(formData.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(formData.auth_strategy === 'bearer' ? { 'Authorization': 'Bearer test-token' } : {}),
+          ...(formData.auth_strategy === 'api_key' ? { 'X-API-Key': 'test-key' } : {})
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1, method: 'initialize',
+          params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'EdgeNeuro-Test', version: '1.0.0' } }
+        })
+      })
+      const data = await res.json().catch(() => ({ error: 'Invalid JSON response' }))
+      setTestResult({ 
+        type: 'auth', 
+        success: res.ok || !!data.result,
+        status: res.status,
+        data
+      })
+    } catch (e: any) {
+      setTestResult({ type: 'auth', success: false, error: e.message })
+    }
+    setTesting(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -87,6 +127,7 @@ export default function Agents() {
 
     setShowForm(false)
     setFormData({ id: '', name: '', description: '', url: '', auth_strategy: 'bearer', triggers: '' })
+    setTestResult(null)
     loadAgents()
   }
 
@@ -113,7 +154,7 @@ export default function Agents() {
               </div>
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label className="form-label">Endpoint URL</label>
-                <input className="form-input" value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} placeholder="https://agent.example.com" required />
+                <input className="form-input" value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} placeholder="https://agent.example.com/mcp" />
               </div>
               <div className="form-group">
                 <label className="form-label">Auth Strategy</label>
@@ -132,7 +173,40 @@ export default function Agents() {
                 <input className="form-input" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Handles HR queries..." />
               </div>
             </div>
-            <button type="submit" className="btn btn-success" style={{ marginTop: '10px' }}>Register Agent</button>
+            
+            {/* Test Before Save */}
+            <div style={{ marginTop: '15px', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
+                <button 
+                  type="button"
+                  className="btn btn-secondary" 
+                  onClick={handleTestAuth}
+                  disabled={testing || !formData.url}
+                >
+                  {testing ? 'Testing...' : 'Test Connection'}
+                </button>
+                <span style={{ fontSize: '12px', color: '#666' }}>Test endpoint and auth before saving</span>
+              </div>
+              
+              {testResult && (
+                <div style={{ 
+                  padding: '10px', 
+                  borderRadius: '4px',
+                  background: testResult.success ? '#d4edda' : '#f8d7da',
+                  color: testResult.success ? '#155724' : '#721c24',
+                  fontSize: '12px'
+                }}>
+                  <strong>{testResult.type === 'discovery' ? 'MCP Discovery' : 'Auth Test'}:</strong> {testResult.success ? 'SUCCESS' : 'FAILED'}
+                  {testResult.error && <p style={{ margin: '5px 0 0' }}>{testResult.error}</p>}
+                  {testResult.status && <p style={{ margin: '5px 0 0' }}>Status: {testResult.status}</p>}
+                  {testResult.data && <pre style={{ margin: '5px 0 0', fontSize: '10px', overflow: 'auto' }}>{JSON.stringify(testResult.data, null, 2)}</pre>}
+                </div>
+              )}
+            </div>
+
+            <button type="submit" className="btn btn-success" style={{ marginTop: '10px' }} disabled={testResult && !testResult.success}>
+              Register Agent
+            </button>
           </form>
         )}
 
