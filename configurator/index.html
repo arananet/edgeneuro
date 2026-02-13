@@ -6,21 +6,22 @@
   <title>EdgeNeuro Configurator</title>
   <style>
     :root {
-      --bg: #0a0a0f;
-      --surface: #12121a;
-      --border: #2a2a3a;
-      --primary: #00f2ff;
-      --secondary: #9d00ff;
-      --success: #00ff88;
-      --error: #ff4444;
-      --text: #e0e0e0;
-      --text-dim: #888;
+      --bg: #f8f9fa;
+      --surface: #ffffff;
+      --border: #dee2e6;
+      --primary: #0066cc;
+      --primary-hover: #0052a3;
+      --success: #28a745;
+      --error: #dc3545;
+      --text: #212529;
+      --text-secondary: #6c757d;
+      --shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
     
     * { box-sizing: border-box; margin: 0; padding: 0; }
     
     body {
-      font-family: 'Inter', -apple-system, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
@@ -28,60 +29,58 @@
     }
     
     .container {
-      max-width: 1200px;
+      max-width: 1100px;
       margin: 0 auto;
       padding: 40px 20px;
     }
     
     header {
       text-align: center;
-      margin-bottom: 60px;
+      margin-bottom: 40px;
     }
     
     h1 {
-      font-size: 2.5rem;
-      background: linear-gradient(135deg, var(--primary), var(--secondary));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      margin-bottom: 10px;
+      font-size: 1.75rem;
+      color: var(--text);
+      margin-bottom: 8px;
     }
     
     .subtitle {
-      color: var(--text-dim);
-      font-size: 1.1rem;
+      color: var(--text-secondary);
+      font-size: 0.95rem;
     }
     
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 24px;
-      margin-bottom: 40px;
     }
     
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 8px;
       padding: 24px;
-      transition: transform 0.2s, border-color 0.2s;
-    }
-    
-    .card:hover {
-      transform: translateY(-2px);
-      border-color: var(--primary);
+      box-shadow: var(--shadow);
     }
     
     .card h2 {
-      font-size: 1.25rem;
-      margin-bottom: 16px;
+      font-size: 1.1rem;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       gap: 10px;
     }
     
-    .card h2 .icon {
-      width: 24px;
-      height: 24px;
+    .badge {
+      font-size: 0.7rem;
+      padding: 3px 8px;
+      background: #e9ecef;
+      border-radius: 4px;
+      color: var(--text-secondary);
+      font-weight: 500;
     }
     
     .form-group {
@@ -90,167 +89,143 @@
     
     label {
       display: block;
-      font-size: 0.875rem;
-      color: var(--text-dim);
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text);
       margin-bottom: 6px;
     }
     
     input, textarea, select {
       width: 100%;
-      padding: 12px;
-      background: var(--bg);
+      padding: 10px 12px;
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 6px;
+      font-size: 0.9rem;
       color: var(--text);
-      font-size: 0.95rem;
       font-family: inherit;
     }
     
     input:focus, textarea:focus, select:focus {
       outline: none;
       border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(0,102,204,0.1);
     }
     
     textarea {
-      min-height: 100px;
+      min-height: 80px;
       resize: vertical;
       font-family: 'Monaco', 'Menlo', monospace;
-      font-size: 0.85rem;
+      font-size: 0.8rem;
     }
     
     button {
       width: 100%;
-      padding: 14px;
-      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      padding: 12px 20px;
+      background: var(--primary);
       border: none;
-      border-radius: 8px;
-      color: #000;
-      font-size: 1rem;
-      font-weight: 600;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 500;
       cursor: pointer;
-      transition: opacity 0.2s, transform 0.1s;
+      transition: background 0.2s;
     }
     
     button:hover {
-      opacity: 0.9;
-    }
-    
-    button:active {
-      transform: scale(0.98);
+      background: var(--primary-hover);
     }
     
     button:disabled {
-      opacity: 0.5;
+      opacity: 0.6;
       cursor: not-allowed;
     }
     
     .results {
-      margin-top: 24px;
+      margin-top: 20px;
       padding: 16px;
-      background: var(--bg);
-      border-radius: 8px;
-      font-family: 'Monaco', 'Menlo', monospace;
+      background: #f8f9fa;
+      border-radius: 6px;
       font-size: 0.85rem;
-      white-space: pre-wrap;
       display: none;
+      border-left: 4px solid var(--border);
     }
     
     .results.visible {
       display: block;
     }
     
+    .results.success { border-left-color: var(--success); }
+    .results.error { border-left-color: var(--error); }
+    
     .status {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 0.8rem;
       font-weight: 600;
       margin-bottom: 12px;
+      display: block;
     }
     
-    .status.success {
-      background: rgba(0, 255, 136, 0.1);
-      color: var(--success);
-    }
-    
-    .status.error {
-      background: rgba(255, 68, 68, 0.1);
-      color: var(--error);
-    }
+    .status.success { color: var(--success); }
+    .status.error { color: var(--error); }
     
     .check-list {
       list-style: none;
     }
     
     .check-list li {
-      padding: 8px 0;
-      border-bottom: 1px solid var(--border);
+      padding: 6px 0;
+      font-size: 0.85rem;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
     
-    .check-list li:last-child {
-      border-bottom: none;
+    .check-list li::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-secondary);
     }
     
-    .check-icon {
-      width: 18px;
-      height: 18px;
+    .check-list li.pass::before { background: var(--success); }
+    .check-list li.fail::before { background: var(--error); }
+    
+    .hero {
+      text-align: center;
+      padding: 20px;
+      background: var(--surface);
+      border-radius: 8px;
+      margin-bottom: 30px;
+      border: 1px solid var(--border);
     }
-    
-    .check-icon.pass { color: var(--success); }
-    .check-icon.fail { color: var(--error); }
-    
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      background: var(--border);
-    }
-    
-    .badge.mcp { background: rgba(0, 242, 255, 0.2); color: var(--primary); }
-    .badge.a2a { background: rgba(157, 0, 255, 0.2); color: var(--secondary); }
   </style>
 </head>
 <body>
   <div class="container">
-    <header>
+    <div class="hero">
       <h1>EdgeNeuro Configurator</h1>
-      <p class="subtitle">MCP Client & A2A Protocol Validator</p>
-    </header>
+      <p class="subtitle">Validate MCP clients, A2A protocol, and agent configurations</p>
+    </div>
     
     <div class="grid">
       <!-- MCP Validator -->
       <div class="card">
-        <h2>
-          <span class="icon">🔌</span>
-          MCP Client Validator
-          <span class="badge mcp">Streamable HTTP</span>
-        </h2>
+        <h2>MCP Client Validator <span class="badge">Streamable HTTP</span></h2>
         <div class="form-group">
           <label>Agent MCP Endpoint URL</label>
           <input type="url" id="mcp-url" placeholder="https://agent.example.com/mcp">
         </div>
         <div class="form-group">
-          <label>Authorization Header (optional)</label>
-          <input type="text" id="mcp-auth" placeholder="Bearer token or X-API-Key">
+          <label>Authorization (optional)</label>
+          <input type="text" id="mcp-auth" placeholder="Bearer token">
         </div>
-        <button onclick="runMCPTest()">Validate MCP</button>
+        <button onclick="runMCPTest()">Validate</button>
         <div class="results" id="mcp-results"></div>
       </div>
       
       <!-- A2A Validator -->
       <div class="card">
-        <h2>
-          <span class="icon">🔀</span>
-          A2A Protocol Validator
-          <span class="badge a2a">Handoff</span>
-        </h2>
+        <h2>A2A Protocol Validator <span class="badge">Handoff</span></h2>
         <div class="form-group">
           <label>Router Endpoint URL</label>
           <input type="url" id="a2a-router" placeholder="https://router.example.com">
@@ -259,25 +234,18 @@
           <label>Test Query</label>
           <input type="text" id="a2a-query" placeholder="I need help with VPN">
         </div>
-        <div class="form-group">
-          <label>Expected Agent ID (optional)</label>
-          <input type="text" id="a2a-expected" placeholder="agent_it">
-        </div>
-        <button onclick="runA2ATest()">Validate A2A</button>
+        <button onclick="runA2ATest()">Validate</button>
         <div class="results" id="a2a-results"></div>
       </div>
       
       <!-- Config Validator -->
       <div class="card">
-        <h2>
-          <span class="icon">⚙️</span>
-          Agent Config Validator
-        </h2>
+        <h2>Agent Config Validator</h2>
         <div class="form-group">
-          <label>Agent Configuration (JSON)</label>
+          <label>Configuration (JSON)</label>
           <textarea id="config-json" placeholder='{"id": "agent_hr", "connection": {...}}'></textarea>
         </div>
-        <button onclick="runConfigTest()">Validate Config</button>
+        <button onclick="runConfigTest()">Validate</button>
         <div class="results" id="config-results"></div>
       </div>
     </div>
@@ -289,70 +257,40 @@
       const auth = document.getElementById('mcp-auth').value;
       const resultsDiv = document.getElementById('mcp-results');
       
-      if (!url) {
-        resultsDiv.innerHTML = '<span class="status error">Please enter a URL</span>';
-        resultsDiv.classList.add('visible');
-        return;
-      }
+      if (!url) return showError(resultsDiv, 'Please enter a URL');
       
-      resultsDiv.innerHTML = 'Testing...';
-      resultsDiv.classList.add('visible');
+      showLoading(resultsDiv);
       
       const headers = { 'Content-Type': 'application/json' };
-      if (auth) {
-        if (auth.startsWith('Bearer ')) headers['Authorization'] = auth;
-        else headers['X-API-Key'] = auth;
-      }
+      if (auth) headers['Authorization'] = auth.startsWith('Bearer') ? auth : `Bearer ${auth}`;
       
       try {
         const res = await fetch(url, {
           method: 'POST',
-          headers: {
-            ...headers,
-            'Accept': 'application/json, text/event-stream',
-            'MCP-Protocol-Version': '2025-11-25'
-          },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'initialize',
-            params: {
-              protocolVersion: '2025-11-25',
-              capabilities: { tools: {} },
-              clientInfo: { name: 'EdgeNeuro-Configurator', version: '1.0.0' }
-            }
-          })
+          headers: { ...headers, 'Accept': 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-11-25' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: { tools: {} }, clientInfo: { name: 'EdgeNeuro', version: '1.0.0' } } })
         });
         
         const passed = res.ok;
         const sessionId = res.headers.get('mcp-session-id');
         
-        let html = `<span class="status ${passed ? 'success' : 'error'}">${passed ? '✓ Valid MCP Client' : '✗ MCP Validation Failed'}</span>`;
-        html += '<ul class="check-list">';
-        html += `<li><span class="check-icon ${passed ? 'pass' : 'fail'}">${passed ? '✓' : '✗'}</span> HTTP ${res.status}: ${res.statusText}</li>`;
-        html += `<li><span class="check-icon ${sessionId ? 'pass' : 'pass'}">${sessionId ? '✓' : '○'}</span> Session: ${sessionId || 'Stateless'}</li>`;
-        html += '</ul>';
-        
-        resultsDiv.innerHTML = html;
+        showResult(resultsDiv, passed, [
+          { pass: passed, text: `HTTP ${res.status}: ${res.statusText}` },
+          { pass: true, text: sessionId ? `Session established` : 'Stateless mode' }
+        ]);
       } catch (e) {
-        resultsDiv.innerHTML = `<span class="status error">Error: ${e.message}</span>`;
+        showError(resultsDiv, e.message);
       }
     }
     
     async function runA2ATest() {
       const router = document.getElementById('a2a-router').value;
       const query = document.getElementById('a2a-query').value;
-      const expected = document.getElementById('a2a-expected').value;
       const resultsDiv = document.getElementById('a2a-results');
       
-      if (!router || !query) {
-        resultsDiv.innerHTML = '<span class="status error">Please enter router URL and query</span>';
-        resultsDiv.classList.add('visible');
-        return;
-      }
+      if (!router || !query) return showError(resultsDiv, 'Please enter router URL and query');
       
-      resultsDiv.innerHTML = 'Testing...';
-      resultsDiv.classList.add('visible');
+      showLoading(resultsDiv);
       
       try {
         const res = await fetch(`${router}?q=${encodeURIComponent(query)}`);
@@ -360,21 +298,14 @@
         
         const passed = data.type === 'a2a/connect' && data.target?.id;
         
-        let html = `<span class="status ${passed ? 'success' : 'error'}">${passed ? '✓ Valid A2A Response' : '✗ A2A Validation Failed'}</span>`;
-        html += '<ul class="check-list">';
-        html += `<li><span class="check-icon ${data.type === 'a2a/connect' ? 'pass' : 'fail'}">${data.type === 'a2a/connect' ? '✓' : '✗'}</span> Type: ${data.type}</li>`;
-        html += `<li><span class="check-icon ${data.target?.id ? 'pass' : 'fail'}">${data.target?.id ? '✓' : '✗'}</span> Target: ${data.target?.id || 'missing'}</li>`;
-        html += `<li><span class="check-icon ${data.target?.endpoint ? 'pass' : 'fail'}">${data.target?.endpoint ? '✓' : '✗'}</span> Endpoint: ${data.target?.endpoint ? 'provided' : 'missing'}</li>`;
-        html += `<li><span class="check-icon ${data.trace_id ? 'pass' : 'fail'}">${data.trace_id ? '✓' : '✗'}</span> Trace ID: ${data.trace_id || 'missing'}</li>`;
-        
-        if (expected && data.target?.id !== expected) {
-          html += `<li><span class="check-icon fail">✗</span> Expected: ${expected}, Got: ${data.target?.id}</li>`;
-        }
-        
-        html += '</ul>';
-        resultsDiv.innerHTML = html;
+        showResult(resultsDiv, passed, [
+          { pass: data.type === 'a2a/connect', text: `Type: ${data.type}` },
+          { pass: !!data.target?.id, text: `Target: ${data.target?.id || 'missing'}` },
+          { pass: !!data.target?.endpoint, text: `Endpoint: ${data.target?.endpoint ? 'provided' : 'missing'}` },
+          { pass: !!data.trace_id, text: `Trace ID: ${data.trace_id || 'missing'}` }
+        ]);
       } catch (e) {
-        resultsDiv.innerHTML = `<span class="status error">Error: ${e.message}</span>`;
+        showError(resultsDiv, e.message);
       }
     }
     
@@ -382,45 +313,44 @@
       const json = document.getElementById('config-json').value;
       const resultsDiv = document.getElementById('config-results');
       
-      if (!json) {
-        resultsDiv.innerHTML = '<span class="status error">Please enter JSON config</span>';
-        resultsDiv.classList.add('visible');
-        return;
-      }
+      if (!json) return showError(resultsDiv, 'Please enter JSON config');
       
       try {
         const config = JSON.parse(json);
-        const checks = [];
+        const checks = [
+          { pass: !!config.id, text: 'id: required' },
+          { pass: !!config.name, text: 'name: required' },
+          { pass: !!config.connection, text: 'connection: required' },
+          { pass: !!config.connection?.url, text: 'connection.url: required' },
+          { pass: !!config.intent_triggers?.length, text: `intent_triggers: ${config.intent_triggers?.length || 0} defined` }
+        ];
         
-        // Required fields
-        checks.push({ name: 'id', pass: !!config.id });
-        checks.push({ name: 'name', pass: !!config.name });
-        checks.push({ name: 'connection', pass: !!config.connection });
-        
-        // Connection
-        if (config.connection) {
-          checks.push({ name: 'connection.protocol', pass: ['http', 'streamable-http', 'websocket'].includes(config.connection.protocol) });
-          checks.push({ name: 'connection.url', pass: !!config.connection.url });
-          checks.push({ name: 'connection.auth_strategy', pass: ['bearer', 'api_key', 'none'].includes(config.connection.auth_strategy) });
-        }
-        
-        // Intent triggers
-        checks.push({ name: 'intent_triggers', pass: Array.isArray(config.intent_triggers) && config.intent_triggers.length > 0 });
-        
-        const allPassed = checks.every(c => c.pass);
-        
-        let html = `<span class="status ${allPassed ? 'success' : 'error'}">${allPassed ? '✓ Valid Config' : '✗ Config Errors'}</span>`;
-        html += '<ul class="check-list">';
-        
-        for (const check of checks) {
-          html += `<li><span class="check-icon ${check.pass ? 'pass' : 'fail'}">${check.pass ? '✓' : '✗'}</span> ${check.name}</li>`;
-        }
-        
-        html += '</ul>';
-        resultsDiv.innerHTML = html;
+        const passed = checks.every(c => c.pass);
+        showResult(resultsDiv, passed, checks);
       } catch (e) {
-        resultsDiv.innerHTML = `<span class="status error">Invalid JSON: ${e.message}</span>`;
+        showError(resultsDiv, 'Invalid JSON: ' + e.message);
       }
+    }
+    
+    function showLoading(div) {
+      div.innerHTML = 'Testing...';
+      div.className = 'results visible';
+    }
+    
+    function showError(div, msg) {
+      div.innerHTML = `<span class="status error">Error</span>${msg}`;
+      div.className = 'results visible error';
+    }
+    
+    function showResult(div, passed, items) {
+      let html = `<span class="status ${passed ? 'success' : 'error'}">${passed ? 'Valid' : 'Validation Failed'}</span>`;
+      html += '<ul class="check-list">';
+      for (const item of items) {
+        html += `<li class="${item.pass ? 'pass' : 'fail'}">${item.text}</li>`;
+      }
+      html += '</ul>';
+      div.innerHTML = html;
+      div.className = `results visible ${passed ? 'success' : 'error'}`;
     }
   </script>
 </body>
