@@ -6,7 +6,7 @@ export default function Testing() {
   const [testType, setTestType] = useState<'a2a' | 'mcp'>('a2a')
   const [a2aQuery, setA2aQuery] = useState('')
   const [mcpUrl, setMcpUrl] = useState('')
-  const [mcpSecret, setMcpSecret] = useState('')
+  const [mcpToken, setMcpToken] = useState('')
   const [mcpAuth, setMcpAuth] = useState<'none' | 'bearer' | 'oauth2'>('none')
   const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
@@ -31,17 +31,17 @@ export default function Testing() {
     setResult(null)
     
     try {
-      // Build auth headers based on selected auth type
+      // Use proxy to bypass CORS
+      const proxyUrl = `${ORCHESTRATOR_URL}/proxy-mcp?url=${encodeURIComponent(mcpUrl)}`
+      
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         'Accept': 'application/json, text/event-stream',
         'MCP-Protocol-Version': '2025-11-25',
       }
       
-      if (mcpAuth === 'bearer' && mcpSecret) {
-        headers['Authorization'] = `Bearer ${mcpSecret}`
-      } else if (mcpAuth === 'oauth2' && mcpSecret) {
-        headers['Authorization'] = `Bearer ${mcpSecret}`
+      if (mcpAuth === 'bearer' || mcpAuth === 'oauth2') {
+        headers['Authorization'] = `Bearer ${mcpToken}`
       }
       
       const body = JSON.stringify({
@@ -51,12 +51,11 @@ export default function Testing() {
         params: {
           protocolVersion: '2025-11-25',
           capabilities: { tools: {} },
-          clientInfo: { name: 'EdgeNeuro-Test', version: '1.0.0' }
+          clientInfo: { name: 'EdgeNeuro-ControlPlane', version: '1.0.0' }
         }
       })
       
-      // Direct fetch to MCP server (bypass proxy for better control)
-      const res = await fetch(mcpUrl, {
+      const res = await fetch(proxyUrl, {
         method: 'POST',
         headers,
         body
@@ -67,23 +66,21 @@ export default function Testing() {
       
       let data: any
       
+      // Handle SSE (Server-Sent Events) or JSON
       if (contentType.includes('text/event-stream') || text.startsWith('event:')) {
-        // Parse SSE format
-        const lines = text.split('\n')
-        let jsonStr = ''
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            jsonStr = line.slice(6)
-            break
+        // Parse SSE: "event: message\ndata: {...}\n\n"
+        const jsonMatch = text.match(/data:\s*(\{[\s\S]*\})/)
+        if (jsonMatch) {
+          try {
+            data = JSON.parse(jsonMatch[1])
+          } catch {
+            data = { raw: text, format: 'sse' }
           }
-        }
-        try {
-          data = jsonStr ? JSON.parse(jsonStr) : { raw: text, format: 'sse' }
-        } catch {
-          data = { raw: text, format: 'sse-parse-error' }
+        } else {
+          data = { raw: text, format: 'sse' }
         }
       } else {
-        // Try JSON
+        // Try JSON response
         try {
           data = JSON.parse(text)
         } catch {
@@ -153,7 +150,7 @@ export default function Testing() {
             <h3 className="card-title">MCP Server Test</h3>
           </div>
           <p style={{ marginBottom: '15px', color: 'var(--text-secondary)' }}>
-            Test an MCP server endpoint directly. Supports auth: none, bearer, oauth2.
+            Test remote MCP server as an MCP client. Uses proxy to bypass CORS.
           </p>
           
           <div className="form-group">
@@ -181,12 +178,12 @@ export default function Testing() {
             </div>
             
             <div className="form-group">
-              <label className="form-label">Token / Secret</label>
+              <label className="form-label">Token</label>
               <input
                 type="password"
                 className="form-input"
-                value={mcpSecret}
-                onChange={e => setMcpSecret(e.target.value)}
+                value={mcpToken}
+                onChange={e => setMcpToken(e.target.value)}
                 placeholder={mcpAuth === 'none' ? 'Not needed' : 'Enter token...'}
                 disabled={mcpAuth === 'none'}
               />
