@@ -265,11 +265,21 @@
       if (auth) headers['Authorization'] = auth.startsWith('Bearer') ? auth : `Bearer ${auth}`;
       
       try {
-        const res = await fetch(url, {
+        // Try JSON first, fall back to SSE
+        let res = await fetch(url, {
           method: 'POST',
-          headers: { ...headers, 'Accept': 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-11-25' },
+          headers: { ...headers, 'Accept': 'application/json', 'MCP-Protocol-Version': '2025-11-25' },
           body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: { tools: {} }, clientInfo: { name: 'EdgeNeuro', version: '1.0.0' } } })
         });
+        
+        // If server wants SSE, retry with SSE accept
+        if (res.status === 406 || res.status === 415) {
+          res = await fetch(url, {
+            method: 'POST',
+            headers: { ...headers, 'Accept': 'text/event-stream', 'MCP-Protocol-Version': '2025-11-25' },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: { tools: {} }, clientInfo: { name: 'EdgeNeuro', version: '1.0.0' } } })
+          });
+        }
         
         const passed = res.ok;
         const sessionId = res.headers.get('mcp-session-id');
