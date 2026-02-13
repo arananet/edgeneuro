@@ -261,20 +261,21 @@
       
       showLoading(resultsDiv);
       
+      // Use proxy to bypass CORS
+      const proxyUrl = `${window.location.origin}/proxy-mcp?url=${encodeURIComponent(url)}`;
       const headers = { 'Content-Type': 'application/json' };
       if (auth) headers['Authorization'] = auth.startsWith('Bearer') ? auth : `Bearer ${auth}`;
       
       try {
-        // Try JSON first, fall back to SSE
-        let res = await fetch(url, {
+        let res = await fetch(proxyUrl, {
           method: 'POST',
-          headers: { ...headers, 'Accept': 'application/json', 'MCP-Protocol-Version': '2025-11-25' },
+          headers: { ...headers, 'Accept': 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-11-25' },
           body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: { tools: {} }, clientInfo: { name: 'EdgeNeuro', version: '1.0.0' } } })
         });
         
         // If server wants SSE, retry with SSE accept
         if (res.status === 406 || res.status === 415) {
-          res = await fetch(url, {
+          res = await fetch(proxyUrl, {
             method: 'POST',
             headers: { ...headers, 'Accept': 'text/event-stream', 'MCP-Protocol-Version': '2025-11-25' },
             body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: { tools: {} }, clientInfo: { name: 'EdgeNeuro', version: '1.0.0' } } })

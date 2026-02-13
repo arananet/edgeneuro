@@ -15,6 +15,36 @@ export default {
   async fetch(request: Request, env: Env) {
     const url = new URL(request.url);
 
+    // --- PROXY: MCP TEST (bypass CORS) ---
+    if (url.pathname === '/proxy-mcp' && request.method === 'POST') {
+      const targetUrl = url.searchParams.get('url');
+      if (!targetUrl) return Response.json({ error: 'Missing url param' }, { status: 400 });
+      
+      try {
+        const body = await request.text();
+        const proxyRes = await fetch(targetUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json, text/event-stream',
+            'MCP-Protocol-Version': '2025-11-25',
+          },
+          body,
+        });
+        
+        const headers: Record<string, string> = {};
+        proxyRes.headers.forEach((v, k) => {
+          if (['content-type', 'mcp-session-id', 'mcp-protocol-version'].includes(k)) {
+            headers[k] = v;
+          }
+        });
+        
+        return new Response(proxyRes.body, { status: proxyRes.status, headers });
+      } catch (e) {
+        return Response.json({ error: e.message }, { status: 500 });
+      }
+    }
+
     // --- ADMIN UI ---
     if (url.pathname === '/admin' || url.pathname === '/admin.html') {
       const html = `<!DOCTYPE html>
