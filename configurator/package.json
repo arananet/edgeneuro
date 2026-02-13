@@ -1,5 +1,11 @@
 {
   "name": "EdgeNeuro Configurator",
   "version": "1.0.0",
-  "description": "Enterprise-grade agent orchestration configurator with MCP & A2A validation"
+  "description": "Enterprise-grade agent orchestration configurator with MCP & A2A validation",
+  "scripts": {
+    "deploy": "npx wrangler deploy"
+  },
+  "dependencies": {
+    "wrangler": "^4.65.0"
+  }
 }
