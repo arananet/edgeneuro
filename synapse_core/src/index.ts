@@ -5,7 +5,7 @@ import { AuthManager } from './auth';
 import { MCPClient } from './mcp';
 
 export interface Env {
-  AI: any;
+  AI: Ai;
   SYNAPSE: DurableObjectNamespace;
   AGENT_KV: KVNamespace;
   AGENT_SECRET: string; 
@@ -61,13 +61,13 @@ export default {
 
     // --- MCP CAPABILITY CHECK (Streamable HTTP) ---
     // If the agent supports HTTP MCP, we verify it's alive and capable before routing
-    if (targetAgent.connection.protocol === 'http') {
-        const mcpHeaders = identity ? AuthManager.propagateToken(identity, targetAgent.connection.auth_strategy) : {};
-        const mcpClient = new MCPClient(targetAgent.connection.url, mcpHeaders);
-        // We call connect() to verify handshake and session establishment
-        // If this fails, the try/catch (not shown here for brevity) would trigger fallback
-        // await mcpClient.connect(); 
-    }
+    // if (targetAgent.connection.protocol === 'http') {
+    //     const mcpHeaders = identity ? AuthManager.propagateToken(identity, targetAgent.connection.auth_strategy) : {};
+    //     const mcpClient = new MCPClient(targetAgent.connection.url, mcpHeaders);
+    //     // We call connect() to verify handshake and session establishment
+    //     // If this fails, the try/catch (not shown here for brevity) would trigger fallback
+    //     // await mcpClient.connect(); 
+    // }
 
     // Log to Synapse
     const id = env.SYNAPSE.idFromName('global-state');

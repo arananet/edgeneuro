@@ -1,6 +1,14 @@
+interface RouteLog {
+  timestamp: number;
+  query: string;
+  target: string;
+  confidence: number;
+  protocol: string;
+}
+
 export class SynapseState {
   state: DurableObjectState;
-  history: any[] = [];
+  history: RouteLog[] = [];
 
   constructor(state: DurableObjectState) {
     this.state = state;

@@ -46,7 +46,7 @@ export class MCPClient {
   /**
    * Execute Tool via POST (Stateless or Stateful if sessionId present)
    */
-  async callTool(name: string, args: any): Promise<any> {
+  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
     if (!this.sessionId) await this.connect();
 
     const requestHeaders = { 
