@@ -45,9 +45,8 @@ export default {
 
     const identity = await AuthManager.validateRequest(request, 'bearer');
     const agents = await getActiveAgents(env.AGENT_KV);
-    const ai = new Ai(env.AI);
 
-    const response = await ai.run('@cf/meta/llama-3-8b-instruct', {
+    const response = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
       messages: [
         { role: 'system', content: buildSystemPrompt(agents) },
         { role: 'user', content: query },
