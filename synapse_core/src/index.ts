@@ -7,9 +7,12 @@ export interface Env {
   AGENT_KV: KVNamespace;
   DB: D1Database;
   AGENT_SECRET: string;
+  ROUTING_MODEL?: string; // Configure via wrangler.toml: routing_model = "@cf/meta/llama-3.2-1b-instruct"
 }
 
 export { SynapseState };
+
+const DEFAULT_ROUTING_MODEL = '@cf/meta/llama-3.2-1b-instruct';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -51,7 +54,7 @@ export default {
       
       if (env.AI && agents.length > 0) {
         try {
-          const response = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+          const response = await env.AI.run('env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL', {
             messages: [
               { role: 'system', content: buildSystemPrompt(agents) },
               { role: 'user', content: `Route this query: "${query}"` },
@@ -348,7 +351,7 @@ export default {
     
     if (env.AI && agents.length > 0) {
       try {
-        const response = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+        const response = await env.AI.run('env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL', {
           messages: [
             { role: 'system', content: buildSystemPrompt(agents) },
             { role: 'user', content: query },
