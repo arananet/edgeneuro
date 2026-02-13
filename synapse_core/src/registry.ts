@@ -28,6 +28,22 @@ export const FALLBACK_AGENTS: AgentProfile[] = [
   },
 ];
 
+// Parse D1 row - JSON fields come as strings
+function parseAgent(row: any): AgentProfile {
+  return {
+    ...row,
+    intent_triggers: typeof row.intent_triggers === 'string' 
+      ? JSON.parse(row.intent_triggers) 
+      : row.intent_triggers || [],
+    capabilities: typeof row.capabilities === 'string' 
+      ? JSON.parse(row.capabilities) 
+      : row.capabilities || [],
+    connection: typeof row.connection === 'string' 
+      ? JSON.parse(row.connection) 
+      : row.connection || { protocol: 'http', url: '', auth_strategy: 'none' },
+  };
+}
+
 // Get all agents from D1
 export async function getActiveAgents(d1: D1Database): Promise<AgentProfile[]> {
   try {
@@ -36,7 +52,7 @@ export async function getActiveAgents(d1: D1Database): Promise<AgentProfile[]> {
     ).all();
     
     if (result.results && result.results.length > 0) {
-      return result.results as unknown as AgentProfile[];
+      return result.results.map(parseAgent);
     }
     return FALLBACK_AGENTS;
   } catch (e) {
@@ -50,7 +66,7 @@ export async function getAllAgents(d1: D1Database): Promise<AgentProfile[]> {
   try {
     const result = await d1.prepare('SELECT * FROM agents').all();
     if (result.results && result.results.length > 0) {
-      return result.results as unknown as AgentProfile[];
+      return result.results.map(parseAgent);
     }
     return [];
   } catch (e) {
@@ -95,7 +111,7 @@ export async function getAgent(d1: D1Database, agentId: string): Promise<AgentPr
   const result = await d1.prepare(
     'SELECT * FROM agents WHERE id = ?'
   ).bind(agentId).first();
-  return result as unknown as AgentProfile | null;
+  return result ? parseAgent(result) : null;
 }
 
 export function buildSystemPrompt(agents: AgentProfile[]): string {
