@@ -69,6 +69,8 @@ body {
   flex: 1;
   margin-left: 220px;
   padding: 20px;
+  padding-bottom: 80px;
+  min-height: 100vh;
 }
 
 /* Header */

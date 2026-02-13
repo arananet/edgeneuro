@@ -11,6 +11,7 @@ interface Agent {
   }
   capabilities?: string[]
   intent_triggers?: string[]
+  approved?: boolean
 }
 
 const ORCHESTRATOR_URL = 'https://edgeneuro-synapse-core.info-693.workers.dev'
@@ -41,6 +42,23 @@ export default function Agents() {
   useEffect(() => {
     loadAgents()
   }, [])
+
+  const handleApprove = async (agentId: string) => {
+    await fetch(`${ORCHESTRATOR_URL}/v1/agent/approve?id=${agentId}`, {
+      headers: { 'X-Agent-Secret': AGENT_SECRET }
+    })
+    loadAgents()
+  }
+
+  const handleDiscover = async (url: string) => {
+    try {
+      const res = await fetch(`${ORCHESTRATOR_URL}/v1/discover?url=${encodeURIComponent(url)}`)
+      const data = await res.json()
+      alert(`MCP Supported: ${data.mcpSupported}\nCapabilities: ${JSON.stringify(data.capabilities, null, 2)}`)
+    } catch (e: any) {
+      alert(`Error: ${e.message}`)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -87,68 +105,34 @@ export default function Agents() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               <div className="form-group">
                 <label className="form-label">Agent ID</label>
-                <input
-                  className="form-input"
-                  value={formData.id}
-                  onChange={e => setFormData({...formData, id: e.target.value})}
-                  placeholder="agent_hr"
-                  required
-                />
+                <input className="form-input" value={formData.id} onChange={e => setFormData({...formData, id: e.target.value})} placeholder="agent_hr" required />
               </div>
               <div className="form-group">
                 <label className="form-label">Name</label>
-                <input
-                  className="form-input"
-                  value={formData.name}
-                  onChange={e => setFormData({...formData, name: e.target.value})}
-                  placeholder="HR Assistant"
-                  required
-                />
+                <input className="form-input" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="HR Assistant" required />
               </div>
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label className="form-label">Endpoint URL</label>
-                <input
-                  className="form-input"
-                  value={formData.url}
-                  onChange={e => setFormData({...formData, url: e.target.value})}
-                  placeholder="https://agent.example.com"
-                  required
-                />
+                <input className="form-input" value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} placeholder="https://agent.example.com" required />
               </div>
               <div className="form-group">
                 <label className="form-label">Auth Strategy</label>
-                <select
-                  className="form-select"
-                  value={formData.auth_strategy}
-                  onChange={e => setFormData({...formData, auth_strategy: e.target.value})}
-                >
+                <select className="form-select" value={formData.auth_strategy} onChange={e => setFormData({...formData, auth_strategy: e.target.value})}>
                   <option value="bearer">Bearer Token</option>
                   <option value="api_key">API Key</option>
                   <option value="none">None</option>
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Intent Triggers (comma separated)</label>
-                <input
-                  className="form-input"
-                  value={formData.triggers}
-                  onChange={e => setFormData({...formData, triggers: e.target.value})}
-                  placeholder="vacation, pto, benefits"
-                />
+                <label className="form-label">Intent Triggers</label>
+                <input className="form-input" value={formData.triggers} onChange={e => setFormData({...formData, triggers: e.target.value})} placeholder="vacation, pto, benefits" />
               </div>
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label className="form-label">Description</label>
-                <input
-                  className="form-input"
-                  value={formData.description}
-                  onChange={e => setFormData({...formData, description: e.target.value})}
-                  placeholder="Handles HR queries..."
-                />
+                <input className="form-input" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Handles HR queries..." />
               </div>
             </div>
-            <button type="submit" className="btn btn-success" style={{ marginTop: '10px' }}>
-              Register Agent
-            </button>
+            <button type="submit" className="btn btn-success" style={{ marginTop: '10px' }}>Register Agent</button>
           </form>
         )}
 
@@ -165,6 +149,7 @@ export default function Agents() {
                 <th>Endpoint</th>
                 <th>Triggers</th>
                 <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -172,9 +157,35 @@ export default function Agents() {
                 <tr key={agent.id}>
                   <td><code>{agent.id}</code></td>
                   <td>{agent.name}</td>
-                  <td><code style={{ fontSize: '12px' }}>{agent.connection.url}</code></td>
+                  <td><code style={{ fontSize: '11px' }}>{agent.connection?.url || '-'}</code></td>
                   <td>{(agent.intent_triggers || []).slice(0, 3).join(', ')}</td>
-                  <td><span className="badge badge-success">Active</span></td>
+                  <td>
+                    {agent.approved ? (
+                      <span className="badge badge-success">Approved</span>
+                    ) : (
+                      <span className="badge" style={{ background: '#fff3cd', color: '#856404' }}>Pending</span>
+                    )}
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                      {agent.connection?.url && (
+                        <button 
+                          onClick={() => handleDiscover(agent.connection.url)}
+                          style={{ padding: '4px 8px', fontSize: '11px', background: '#e9ecef', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                        >
+                          Discover
+                        </button>
+                      )}
+                      {!agent.approved && (
+                        <button 
+                          onClick={() => handleApprove(agent.id)}
+                          style={{ padding: '4px 8px', fontSize: '11px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                        >
+                          Approve
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
