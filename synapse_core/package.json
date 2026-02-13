@@ -6,7 +6,8 @@
     "deploy": "npm exec -- wrangler deploy",
     "dev": "npm exec -- wrangler dev",
     "d1:create": "npm exec -- wrangler d1 create edgeneuro-db",
-    "d1:schema": "npm exec -- wrangler d1 execute edgeneuro-db --local --file=./schema.sql"
+    "d1:schema": "npm exec -- wrangler d1 execute edgeneuro-db --local --file=./schema.sql",
+    "d1:schema:remote": "npm exec -- wrangler d1 execute edgeneuro-db --file=./schema.sql"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"
