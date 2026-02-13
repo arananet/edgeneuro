@@ -129,7 +129,7 @@ export default {
       return Response.json({ success: true, agent }, { headers: CORS_HEADERS });
     }
 
-    // --- AUTO-DISCOVERY ---
+    // --- AUTO-DISCOVERY (MCP) ---
     if (request.method === 'GET' && url.pathname === '/v1/discover') {
       const targetUrl = url.searchParams.get('url');
       if (!targetUrl) return Response.json({ error: 'Missing url param' }, { status: 400, headers: CORS_HEADERS });
@@ -157,6 +157,50 @@ export default {
         }, { headers: CORS_HEADERS });
       } catch (e: any) {
         return Response.json({ url: targetUrl, error: e.message, mcpSupported: false }, { headers: CORS_HEADERS });
+      }
+    }
+
+    // --- A2A DISCOVERY ---
+    if (request.method === 'GET' && url.pathname === '/v1/discover-a2a') {
+      const targetUrl = url.searchParams.get('url');
+      if (!targetUrl) return Response.json({ error: 'Missing url param' }, { status: 400, headers: CORS_HEADERS });
+      
+      try {
+        const res = await fetch(targetUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/a2a+json',
+            'Accept': 'application/a2a+json',
+            'X-A2A-Version': '1.0',
+          },
+          body: JSON.stringify({
+            protocol: 'a2a/1.0',
+            id: crypto.randomUUID(),
+            type: 'discovery/query',
+            source: 'edgeneuro-orchestrator',
+            target: '',
+            payload: { task: 'discover', context: {} }
+          })
+        });
+        
+        const data = await res.json();
+        const a2aSupported = res.ok && (
+          data.protocol === 'a2a/1.0' ||
+          data.type === 'discovery/response' ||
+          (data.capabilities && data.capabilities.some((c: string) => c.startsWith('a2a/'))
+        );
+        
+        return Response.json({
+          url: targetUrl,
+          a2aSupported,
+          agentName: data.agent?.name || data.agent?.id,
+          capabilities: data.capabilities || [],
+          protocolVersion: data.protocol
+        }, { headers: CORS_HEADERS });
+      } catch (e: any) {
+        return Response.json({ url: targetUrl, error: e.message, a2aSupported: false }, { headers: CORS_HEADERS });
+      }
+    }
       }
     }
 
