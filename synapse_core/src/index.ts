@@ -14,7 +14,7 @@ export { SynapseState };
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Agent-Secret',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Agent-Secret, MCP-Protocol-Version, Accept',
 };
 
 export default {
@@ -157,6 +157,46 @@ export default {
         }, { headers: CORS_HEADERS });
       } catch (e: any) {
         return Response.json({ url: targetUrl, error: e.message, mcpSupported: false }, { headers: CORS_HEADERS });
+      }
+    }
+
+    // --- MCP PROXY (bypass CORS) ---
+    if (url.pathname === '/proxy-mcp') {
+      const targetUrl = url.searchParams.get('url');
+      if (!targetUrl) return Response.json({ error: 'Missing url param' }, { status: 400, headers: CORS_HEADERS });
+      
+      // Forward the request, stripping problematic headers
+      const mcpHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream',
+      };
+      
+      // Add MCP protocol version if provided
+      const mcpVersion = request.headers.get('MCP-Protocol-Version');
+      if (mcpVersion) mcpHeaders['MCP-Protocol-Version'] = mcpVersion;
+      
+      // Add auth if provided
+      const auth = request.headers.get('Authorization');
+      if (auth) mcpHeaders['Authorization'] = auth;
+      
+      try {
+        const body = await request.text();
+        const res = await fetch(targetUrl, {
+          method: 'POST',
+          headers: mcpHeaders,
+          body,
+        });
+        
+        const data = await res.text();
+        return new Response(data, {
+          status: res.status,
+          headers: {
+            ...CORS_HEADERS,
+            'Content-Type': res.headers.get('Content-Type') || 'application/json',
+          },
+        });
+      } catch (e: any) {
+        return Response.json({ error: e.message }, { status: 500, headers: CORS_HEADERS });
       }
     }
 
