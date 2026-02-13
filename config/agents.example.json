@@ -1,0 +1,101 @@
+{
+  "$schema": "./schemas/agent.schema.json",
+  "agents": [
+    {
+      "id": "agent_hr",
+      "name": "HR Assistant",
+      "description": "Handles HR-related queries like PTO, benefits, and policies",
+      "connection": {
+        "protocol": "streamable-http",
+        "url": "https://hr-service.internal.example.com/mcp",
+        "auth_strategy": "bearer"
+      },
+      "mcp": {
+        "url": "https://hr-service.internal.example.com/mcp",
+        "auth": {
+          "type": "bearer",
+          "token": "{{HR_API_TOKEN}}"
+        }
+      },
+      "capabilities": [
+        "query_pto",
+        "list_benefits",
+        "policy_lookup",
+        "employee_directory"
+      ],
+      "intent_triggers": [
+        "vacation",
+        "holiday",
+        "benefits",
+        "payroll",
+        "policy",
+        "sick leave",
+        "hr"
+      ]
+    },
+    {
+      "id": "agent_it",
+      "name": "IT Support",
+      "description": "Technical support for hardware, software, and access issues",
+      "connection": {
+        "protocol": "streamable-http",
+        "url": "https://it-service.internal.example.com/mcp",
+        "auth_strategy": "bearer"
+      },
+      "mcp": {
+        "url": "https://it-service.internal.example.com/mcp",
+        "auth": {
+          "type": "bearer",
+          "token": "{{IT_API_TOKEN}}"
+        }
+      },
+      "capabilities": [
+        "create_ticket",
+        "reset_password",
+        "software_install",
+        "vpn_setup"
+      ],
+      "intent_triggers": [
+        "vpn",
+        "password",
+        "login",
+        "software",
+        "computer",
+        "wifi",
+        "access",
+        "ticket",
+        "it support"
+      ]
+    },
+    {
+      "id": "agent_data",
+      "name": "Data Analytics",
+      "description": "Query databases and generate reports",
+      "connection": {
+        "protocol": "streamable-http",
+        "url": "https://data-service.internal.example.com/mcp",
+        "auth_strategy": "api_key"
+      },
+      "mcp": {
+        "url": "https://data-service.internal.example.com/mcp",
+        "auth": {
+          "type": "api_key",
+          "token": "{{DATA_API_KEY}}"
+        }
+      },
+      "capabilities": [
+        "sql_query",
+        "generate_report",
+        "data_export"
+      ],
+      "intent_triggers": [
+        "sales data",
+        "revenue",
+        "report",
+        "analytics",
+        "database",
+        "query"
+      ]
+    }
+  ]
+}

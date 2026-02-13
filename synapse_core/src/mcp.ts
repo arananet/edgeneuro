@@ -1,110 +1,341 @@
 // synapse_core/src/mcp.ts
-// MCP Client - Streamable HTTP Transport (Official Spec)
+// MCP Client - Streamable HTTP Transport (Official Spec 2025-11-25)
+
+export interface MCPConfig {
+  url: string;
+  auth?: {
+    type: 'bearer' | 'api_key' | 'mtls';
+    token?: string;
+    key?: string;
+    cert?: string;
+  };
+  capabilities?: {
+    resources?: boolean;
+    prompts?: boolean;
+    tools?: boolean;
+    sampling?: boolean;
+  };
+}
+
+export interface AgentConfig {
+  id: string;
+  name: string;
+  description: string;
+  connection: {
+    protocol: 'http' | 'streamable-http';
+    url: string;
+    auth_strategy: 'bearer' | 'api_key' | 'none';
+  };
+  mcp?: MCPConfig;
+  capabilities: string[];
+  intent_triggers: string[];
+}
 
 export class MCPClient {
   baseUrl: string;
   headers: Record<string, string>;
   sessionId?: string;
+  protocolVersion: string = '2025-11-25';
+  serverCapabilities?: any;
 
-  constructor(url: string, headers: Record<string, string>) {
+  constructor(url: string, headers: Record<string, string> = {}) {
     this.baseUrl = url.replace(/\/$/, '');
     this.headers = headers;
   }
 
   /**
-   * Handshake: POST InitializeRequest -> Get Session ID
+   * Initialize connection with the MCP Server
+   * Per spec: Client sends InitializeRequest, Server responds with InitializeResult
    */
-  async connect(): Promise<void> {
-    const response = await fetch(`${this.baseUrl}`, {
+  async connect(): Promise<any> {
+    const response = await fetch(`${this.baseUrl}/mcp`, {
       method: 'POST',
       headers: {
         ...this.headers,
         'Content-Type': 'application/json',
         Accept: 'application/json, text/event-stream',
+        'MCP-Protocol-Version': this.protocolVersion,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
         method: 'initialize',
         params: {
-          protocolVersion: '2024-11-05',
-          capabilities: {},
-          clientInfo: { name: 'EdgeNeuro-Synapse', version: '1.0.0' },
+          protocolVersion: this.protocolVersion,
+          capabilities: {
+            tools: {},
+            resources: {},
+            prompts: {},
+          },
+          clientInfo: { name: 'EdgeNeuro-SynapseCore', version: '1.0.0' },
         },
       }),
     });
 
-    if (!response.ok) throw new Error(`MCP Init Failed: ${response.status}`);
-
-    // Capture Session ID (Spec requirement)
-    const sessionId = response.headers.get('Mcp-Session-Id');
-    if (sessionId) this.sessionId = sessionId;
-
-    // We ignore the body for now, as we assume success
-  }
-
-  /**
-   * Execute Tool via POST (Stateless or Stateful if sessionId present)
-   */
-  async callTool(
-    name: string,
-    args: Record<string, unknown>,
-  ): Promise<unknown> {
-    if (!this.sessionId) await this.connect();
-
-    const requestHeaders = {
-      ...this.headers,
-      'Content-Type': 'application/json',
-    };
-
-    if (this.sessionId) {
-      requestHeaders['Mcp-Session-Id'] = this.sessionId;
+    if (!response.ok) {
+      throw new Error(`MCP Init Failed: ${response.status} ${response.statusText}`);
     }
 
-    const response = await fetch(`${this.baseUrl}`, {
-      method: 'POST',
-      headers: requestHeaders,
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: crypto.randomUUID(),
-        method: 'tools/call',
-        params: { name, arguments: args },
-      }),
-    });
+    // Handle SSE stream response
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('text/event-stream')) {
+      return this.handleSSE(response);
+    }
 
-    if (!response.ok) throw new Error(`Tool Call Failed: ${response.status}`);
-
+    // Handle JSON response
     const json = await response.json();
-    if (json.error) throw new Error(json.error.message);
+    
+    // Capture Session ID
+    const sessionId = response.headers.get('mcp-session-id');
+    if (sessionId) {
+      this.sessionId = sessionId;
+    }
 
+    if (json.error) {
+      throw new Error(json.error.message);
+    }
+
+    this.serverCapabilities = json.result?.capabilities || {};
     return json.result;
   }
 
   /**
-   * Discover capabilities (via tools/list)
+   * Handle Server-Sent Events for streaming responses
    */
-  async getCapabilities(): Promise<string[]> {
-    if (!this.sessionId) await this.connect();
+  private async handleSSE(response: Response): Promise<any> {
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let eventId = '';
 
-    const requestHeaders = {
+    if (!reader) {
+      throw new Error('No response body');
+    }
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('id:')) {
+            eventId = line.substring(3).trim();
+          } else if (line.startsWith('data:')) {
+            const data = line.substring(5).trim();
+            try {
+              const json = JSON.parse(data);
+              if (json.id === 1) {
+                // Initialize response
+                this.serverCapabilities = json.result?.capabilities || {};
+                return json.result;
+              }
+              return json;
+            } catch (e) {
+              // Ignore parse errors for non-JSON lines
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  /**
+   * Send a JSON-RPC request
+   */
+  private async sendRequest(method: string, params: any): Promise<any> {
+    if (!this.sessionId) {
+      await this.connect();
+    }
+
+    const requestHeaders: Record<string, string> = {
       ...this.headers,
       'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+      'MCP-Protocol-Version': this.protocolVersion,
     };
-    if (this.sessionId) requestHeaders['Mcp-Session-Id'] = this.sessionId;
 
-    const response = await fetch(`${this.baseUrl}`, {
+    if (this.sessionId) {
+      requestHeaders['MCP-Session-Id'] = this.sessionId;
+    }
+
+    const response = await fetch(`${this.baseUrl}/mcp`, {
       method: 'POST',
       headers: requestHeaders,
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: crypto.randomUUID(),
-        method: 'tools/list',
+        method,
+        params,
       }),
     });
 
-    if (!response.ok) return [];
+    // Handle 404 - session expired
+    if (response.status === 404 && this.sessionId) {
+      this.sessionId = undefined;
+      return this.sendRequest(method, params); // Retry with new session
+    }
 
-    const json = await response.json();
-    return (json.result?.tools || []).map((t: { name: string }) => t.name);
+    // Handle 400 - bad request
+    if (response.status === 400) {
+      const error = await response.json();
+      throw new Error(error.error?.message || 'Bad Request');
+    }
+
+    if (!response.ok) {
+      throw new Error(`MCP Request Failed: ${response.status}`);
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('text/event-stream')) {
+      return this.handleSSE(response);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Execute Tool via MCP
+   */
+  async callTool(name: string, args: Record<string, unknown>): Promise<any> {
+    return this.sendRequest('tools/call', { name, arguments: args });
+  }
+
+  /**
+   * List available tools
+   */
+  async listTools(): Promise<any[]> {
+    const response = await this.sendRequest('tools/list', {});
+    return response.result?.tools || [];
+  }
+
+  /**
+   * List available resources
+   */
+  async listResources(): Promise<any[]> {
+    const response = await this.sendRequest('resources/list', {});
+    return response.result?.resources || [];
+  }
+
+  /**
+   * Read a resource
+   */
+  async readResource(uri: string): Promise<any> {
+    return this.sendRequest('resources/read', { uri });
+  }
+
+  /**
+   * Ping to keepalive
+   */
+  async ping(): Promise<void> {
+    await this.sendRequest('ping', {});
   }
 }
+
+/**
+ * MCP Configurator - Loads agent configurations from JSON
+ */
+export class MCPConfigurator {
+  private agents: Map<string, AgentConfig> = new Map();
+
+  /**
+   * Load agents from JSON configuration
+   */
+  loadFromJSON(config: AgentConfig[]): void {
+    this.agents.clear();
+    for (const agent of config) {
+      this.agents.set(agent.id, agent);
+    }
+  }
+
+  /**
+   * Get agent by ID
+   */
+  getAgent(id: string): AgentConfig | undefined {
+    return this.agents.get(id);
+  }
+
+  /**
+   * Get all agents
+   */
+  getAllAgents(): AgentConfig[] {
+    return Array.from(this.agents.values());
+  }
+
+  /**
+   * Find agents matching an intent
+   */
+  findByIntent(intent: string): AgentConfig[] {
+    const intentLower = intent.toLowerCase();
+    return this.getAllAgents().filter(agent =>
+      agent.intent_triggers.some(trigger => 
+        intentLower.includes(trigger.toLowerCase())
+      )
+    );
+  }
+
+  /**
+   * Create MCP client for an agent
+   */
+  createClient(agentId: string): MCPClient | null {
+    const agent = this.getAgent(agentId);
+    if (!agent || !agent.mcp) return null;
+
+    const headers: Record<string, string> = {};
+    
+    if (agent.connection.auth_strategy === 'bearer' && agent.mcp.auth?.token) {
+      headers['Authorization'] = `Bearer ${agent.mcp.auth.token}`;
+    } else if (agent.connection.auth_strategy === 'api_key' && agent.mcp.auth?.token) {
+      headers['X-API-Key'] = agent.mcp.auth.token;
+    }
+
+    return new MCPClient(agent.mcp.url, headers);
+  }
+}
+
+// Default configuration schema for enterprise use
+export const DEFAULT_AGENT_SCHEMA = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', description: 'Unique agent identifier' },
+    name: { type: 'string', description: 'Human-readable agent name' },
+    description: { type: 'string', description: 'Agent capability description' },
+    connection: {
+      type: 'object',
+      properties: {
+        protocol: { type: 'string', enum: ['http', 'streamable-http'] },
+        url: { type: 'string', format: 'uri' },
+        auth_strategy: { type: 'string', enum: ['bearer', 'api_key', 'none'] },
+      },
+      required: ['protocol', 'url'],
+    },
+    mcp: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', format: 'uri' },
+        auth: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', enum: ['bearer', 'api_key', 'mtls'] },
+            token: { type: 'string' },
+          },
+        },
+      },
+    },
+    capabilities: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    intent_triggers: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Keywords that trigger this agent',
+    },
+  },
+  required: ['id', 'name', 'connection', 'capabilities'],
+};
