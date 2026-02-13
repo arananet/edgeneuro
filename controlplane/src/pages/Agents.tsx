@@ -37,7 +37,22 @@ export default function Agents() {
     setLoading(true)
     fetch(`${ORCHESTRATOR_URL}/v1/agents`)
       .then(res => res.json())
-      .then(data => setAgents(data.agents || []))
+      .then(data => {
+        // Parse JSON fields from D1
+        const agents = (data.agents || []).map((a: any) => ({
+          ...a,
+          intent_triggers: typeof a.intent_triggers === 'string' 
+            ? JSON.parse(a.intent_triggers) 
+            : a.intent_triggers || [],
+          capabilities: typeof a.capabilities === 'string' 
+            ? JSON.parse(a.capabilities) 
+            : a.capabilities || [],
+          connection: typeof a.connection === 'string' 
+            ? JSON.parse(a.connection) 
+            : a.connection || {}
+        }))
+        setAgents(agents)
+      })
       .catch(() => setAgents([]))
       .finally(() => setLoading(false))
   }
