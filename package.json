@@ -14,7 +14,7 @@
     "setup:poc": "bash scripts/poc-setup.sh"
   },
   "devDependencies": {
-    "@cloudflare/wrangler": "^3.0.0",
+    "wrangler": "^3.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.0.0",
