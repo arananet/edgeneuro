@@ -1,4 +1,5 @@
 # EdgeNeuro 🧠
+
 **Enterprise-Grade Serverless Orchestrator**
 
 ![EdgeNeuro Logo](./docs/assets/logo.svg)
@@ -10,6 +11,7 @@ EdgeNeuro is a "Hot Potato" architecture orchestrator built on Cloudflare Worker
 ## Architecture Diagrams
 
 ### System Context
+
 EdgeNeuro acts as the intelligent routing layer (middleware) between Enterprise Users and the distributed Agent Mesh.
 
 ```mermaid
@@ -17,7 +19,7 @@ C4Context
     title System Context Diagram - EdgeNeuro
 
     Person(user, "Enterprise User", "Employees accessing internal tools via Chat/Voice")
-    
+
     System_Boundary(edgeneuro, "EdgeNeuro Ecosystem") {
         System(cortex, "SynapseCore Router", "Classifies intent and hands off connection")
         System(synapse, "Synapse State", "Visualizes traffic and logs routing decisions")
@@ -34,6 +36,7 @@ C4Context
 ```
 
 ### The "Hot Potato" Handoff Protocol
+
 The Router does NOT proxy traffic; it introduces and leaves. This ensures zero bottleneck and infinite scalability.
 
 ```mermaid
@@ -53,7 +56,7 @@ sequenceDiagram
     U->>A: Connect()
     activate A
     A-->>U: "Connected. Checking VPN logs..."
-    
+
     Note over U, A: Phase 3: The Recall
     U->>A: "Also, what's the stock price?"
     A->>A: Intent Check (Out of Scope)
@@ -74,12 +77,15 @@ This architecture is based on the latest research in multi-agent orchestration:
 ---
 
 ## Spec-Driven Development
+
 This project follows **GitHub Spec Kit**. See `.spec/` for immutable rules and technical specifications.
 
 ## Setup
+
 1.  **Install Deps:** `npm install`
 2.  **Deploy SynapseCore:** `cd synapse_core && wrangler deploy`
 3.  **Run Viz:** `cd viz && npm run dev`
 
 ## License
+
 MIT

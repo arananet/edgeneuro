@@ -1,9 +1,9 @@
 // synapse_core/src/registry.ts (Updated for Auth Strategy)
 
 export interface AgentProfile {
-  id: string; 
+  id: string;
   name: string;
-  domain: string[]; 
+  domain: string[];
   connection: {
     protocol: 'websocket' | 'http' | 'a2a';
     url: string;
@@ -11,7 +11,7 @@ export interface AgentProfile {
   };
   metadata?: {
     version: string;
-    capabilities: string[]; 
+    capabilities: string[];
   };
 }
 
@@ -20,23 +20,27 @@ export const FALLBACK_AGENTS: AgentProfile[] = [
     id: 'agent_fallback',
     name: 'General Support',
     domain: ['general_help', 'unknown_query'],
-    connection: { 
-      protocol: 'http', 
+    connection: {
+      protocol: 'http',
       url: 'https://support.internal',
-      auth_strategy: 'bearer'
+      auth_strategy: 'bearer',
     },
-    metadata: { version: '1.0', capabilities: ['basic_chat'] }
-  }
+    metadata: { version: '1.0', capabilities: ['basic_chat'] },
+  },
 ];
 
-export async function getActiveAgents(kv: KVNamespace): Promise<AgentProfile[]> {
+export async function getActiveAgents(
+  kv: KVNamespace,
+): Promise<AgentProfile[]> {
   try {
     const list = await kv.list({ prefix: 'agent:' });
     const agents: AgentProfile[] = [];
-    await Promise.all(list.keys.map(async (key) => {
-      const agent = await kv.get<AgentProfile>(key.name, 'json');
-      if (agent) agents.push(agent);
-    }));
+    await Promise.all(
+      list.keys.map(async (key) => {
+        const agent = await kv.get<AgentProfile>(key.name, 'json');
+        if (agent) agents.push(agent);
+      }),
+    );
     return agents.length > 0 ? agents : FALLBACK_AGENTS;
   } catch (e) {
     return FALLBACK_AGENTS;
@@ -44,7 +48,9 @@ export async function getActiveAgents(kv: KVNamespace): Promise<AgentProfile[]> 
 }
 
 export function buildSystemPrompt(agents: AgentProfile[]): string {
-  const agentDesc = agents.map(a => `- ${a.id} (${a.name}): [${a.domain.join(', ')}]`).join('\n');
+  const agentDesc = agents
+    .map((a) => `- ${a.id} (${a.name}): [${a.domain.join(', ')}]`)
+    .join('\n');
   return `You are the EdgeNeuro SynapseCore. Route the task to the correct peer.
   
   Active A2A Peers:

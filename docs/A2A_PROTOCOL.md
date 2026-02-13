@@ -4,6 +4,7 @@
 **Context:** EdgeNeuro Interoperability Layer
 
 ## 1. The A2A Envelope
+
 All communication between Cortex and Agents MUST use the standard A2A Envelope.
 
 ```json
@@ -26,9 +27,11 @@ All communication between Cortex and Agents MUST use the standard A2A Envelope.
 ```
 
 ## 2. Handoff Mechanics (The Redirect)
+
 When Cortex routes a user, it returns a **Connection Instruction** following the A2A Discovery format.
 
 **Response to Client:**
+
 ```json
 {
   "type": "a2a/connect",
@@ -45,6 +48,7 @@ When Cortex routes a user, it returns a **Connection Instruction** following the
 ```
 
 ## 3. Headers
+
 - `X-A2A-Version`: `1.0`
 - `X-A2A-Trace-Id`: `<uuid>`
 - `Content-Type`: `application/a2a+json`

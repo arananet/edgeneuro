@@ -30,8 +30,8 @@ export class SynapseState {
       return Response.json(this.history, {
         headers: {
           'Access-Control-Allow-Origin': '*',
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+        },
       });
     }
 

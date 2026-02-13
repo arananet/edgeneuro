@@ -10,10 +10,10 @@ jobs:
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - uses: hashicorp/setup-terraform@v2
         with:
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }} # Optional if using TF Cloud
@@ -32,7 +32,7 @@ jobs:
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          
+
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve

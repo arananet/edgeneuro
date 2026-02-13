@@ -17,21 +17,21 @@ export class MCPClient {
   async connect(): Promise<void> {
     const response = await fetch(`${this.baseUrl}`, {
       method: 'POST',
-      headers: { 
-        ...this.headers, 
+      headers: {
+        ...this.headers,
         'Content-Type': 'application/json',
-        'Accept': 'application/json, text/event-stream'
+        Accept: 'application/json, text/event-stream',
       },
       body: JSON.stringify({
-        jsonrpc: "2.0",
+        jsonrpc: '2.0',
         id: 1,
-        method: "initialize",
+        method: 'initialize',
         params: {
-          protocolVersion: "2024-11-05",
+          protocolVersion: '2024-11-05',
           capabilities: {},
-          clientInfo: { name: "EdgeNeuro-Synapse", version: "1.0.0" }
-        }
-      })
+          clientInfo: { name: 'EdgeNeuro-Synapse', version: '1.0.0' },
+        },
+      }),
     });
 
     if (!response.ok) throw new Error(`MCP Init Failed: ${response.status}`);
@@ -46,14 +46,17 @@ export class MCPClient {
   /**
    * Execute Tool via POST (Stateless or Stateful if sessionId present)
    */
-  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+  async callTool(
+    name: string,
+    args: Record<string, unknown>,
+  ): Promise<unknown> {
     if (!this.sessionId) await this.connect();
 
-    const requestHeaders = { 
-      ...this.headers, 
-      'Content-Type': 'application/json' 
+    const requestHeaders = {
+      ...this.headers,
+      'Content-Type': 'application/json',
     };
-    
+
     if (this.sessionId) {
       requestHeaders['Mcp-Session-Id'] = this.sessionId;
     }
@@ -62,18 +65,18 @@ export class MCPClient {
       method: 'POST',
       headers: requestHeaders,
       body: JSON.stringify({
-        jsonrpc: "2.0",
+        jsonrpc: '2.0',
         id: crypto.randomUUID(),
-        method: "tools/call",
-        params: { name, arguments: args }
-      })
+        method: 'tools/call',
+        params: { name, arguments: args },
+      }),
     });
 
     if (!response.ok) throw new Error(`Tool Call Failed: ${response.status}`);
-    
+
     const json = await response.json();
     if (json.error) throw new Error(json.error.message);
-    
+
     return json.result;
   }
 
@@ -83,21 +86,24 @@ export class MCPClient {
   async getCapabilities(): Promise<string[]> {
     if (!this.sessionId) await this.connect();
 
-    const requestHeaders = { ...this.headers, 'Content-Type': 'application/json' };
+    const requestHeaders = {
+      ...this.headers,
+      'Content-Type': 'application/json',
+    };
     if (this.sessionId) requestHeaders['Mcp-Session-Id'] = this.sessionId;
 
     const response = await fetch(`${this.baseUrl}`, {
       method: 'POST',
       headers: requestHeaders,
       body: JSON.stringify({
-        jsonrpc: "2.0",
+        jsonrpc: '2.0',
         id: crypto.randomUUID(),
-        method: "tools/list"
-      })
+        method: 'tools/list',
+      }),
     });
 
     if (!response.ok) return [];
-    
+
     const json = await response.json();
     return (json.result?.tools || []).map((t: { name: string }) => t.name);
   }

@@ -15,8 +15,10 @@ export class AuthManager {
    * Validates incoming request and extracts identity.
    * Supports Bearer (OAuth) and mTLS (Client Cert Headers).
    */
-  static async validateRequest(req: Request, strategy: AuthStrategy): Promise<IdentityContext | null> {
-    
+  static async validateRequest(
+    req: Request,
+    strategy: AuthStrategy,
+  ): Promise<IdentityContext | null> {
     // 1. mTLS Check (Cloudflare Access / Mutual TLS)
     const certHeader = req.headers.get('X-Client-Cert-Verified');
     if (strategy === 'mtls' && certHeader !== 'SUCCESS') {
@@ -36,7 +38,7 @@ export class AuthManager {
       userId: 'user_mock_123',
       userToken: userToken,
       systemToken: 'sys_edgeneuro_core', // Internal System Identity
-      scopes: ['agent.read', 'agent.connect']
+      scopes: ['agent.read', 'agent.connect'],
     };
   }
 
@@ -44,9 +46,12 @@ export class AuthManager {
    * Generates headers for downstream Agent calls.
    * Handles Token Propagation (On-Behalf-Of flow).
    */
-  static propagateToken(ctx: IdentityContext, targetType: AuthStrategy): Record<string, string> {
+  static propagateToken(
+    ctx: IdentityContext,
+    targetType: AuthStrategy,
+  ): Record<string, string> {
     const headers: Record<string, string> = {};
-    
+
     // Always attach Trace ID
     headers['X-A2A-Trace-Id'] = crypto.randomUUID();
 
@@ -54,11 +59,11 @@ export class AuthManager {
     if (targetType === 'oauth2' || targetType === 'bearer') {
       // If we have a user token, we pass it (Delegation)
       if (ctx.userToken) headers['Authorization'] = `Bearer ${ctx.userToken}`;
-      
+
       // We also assert our System Identity
       headers['X-EdgeNeuro-System-Auth'] = ctx.systemToken;
-    } 
-    
+    }
+
     // 2. API Key Propagation
     else if (targetType === 'api_key') {
       headers['X-API-Key'] = ctx.systemToken;
