@@ -49,7 +49,6 @@ export default {
       
       let decision = { target: 'agent_fallback', confidence: 0.0, reason: 'No AI available' };
       
-      // Try LLM first if available
       if (env.AI && agents.length > 0) {
         try {
           const response = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
@@ -72,7 +71,6 @@ export default {
           decision.reason = `LLM error: ${e.message}`;
         }
       } else {
-        // Fallback to keyword matching
         const q = query.toLowerCase();
         for (const agent of agents) {
           const triggers = agent.intent_triggers || [];
@@ -129,7 +127,7 @@ export default {
       return Response.json({ success: true, agent }, { headers: CORS_HEADERS });
     }
 
-    // --- AUTO-DISCOVERY (MCP) ---
+    // --- MCP DISCOVERY ---
     if (request.method === 'GET' && url.pathname === '/v1/discover') {
       const targetUrl = url.searchParams.get('url');
       if (!targetUrl) return Response.json({ error: 'Missing url param' }, { status: 400, headers: CORS_HEADERS });
@@ -187,7 +185,7 @@ export default {
         const a2aSupported = res.ok && (
           data.protocol === 'a2a/1.0' ||
           data.type === 'discovery/response' ||
-          (data.capabilities && data.capabilities.some((c: string) => c.startsWith('a2a/'))
+          (data.capabilities && data.capabilities.some((c: string) => c.startsWith('a2a/')))
         );
         
         return Response.json({
@@ -201,66 +199,153 @@ export default {
         return Response.json({ url: targetUrl, error: e.message, a2aSupported: false }, { headers: CORS_HEADERS });
       }
     }
-      }
-    }
 
-    // --- MCP PROXY (bypass CORS) ---
+    // --- MCP PROXY ---
     if (url.pathname === '/proxy-mcp') {
       const targetUrl = url.searchParams.get('url');
       if (!targetUrl) return Response.json({ error: 'Missing url param' }, { status: 400, headers: CORS_HEADERS });
       
-      // Forward the request, stripping problematic headers
       const mcpHeaders: Record<string, string> = {
         'Content-Type': 'application/json',
         'Accept': 'application/json, text/event-stream',
       };
       
-      // Add MCP protocol version if provided
       const mcpVersion = request.headers.get('MCP-Protocol-Version');
       if (mcpVersion) mcpHeaders['MCP-Protocol-Version'] = mcpVersion;
       
-      // Add auth if provided
       const auth = request.headers.get('Authorization');
       if (auth) mcpHeaders['Authorization'] = auth;
       
       try {
         const body = await request.text();
-        const res = await fetch(targetUrl, {
-          method: 'POST',
-          headers: mcpHeaders,
-          body,
-        });
-        
+        const res = await fetch(targetUrl, { method: 'POST', headers: mcpHeaders, body });
         const data = await res.text();
+        
         return new Response(data, {
           status: res.status,
-          headers: {
-            ...CORS_HEADERS,
-            'Content-Type': res.headers.get('Content-Type') || 'application/json',
-          },
+          headers: { ...CORS_HEADERS, 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
         });
       } catch (e: any) {
         return Response.json({ error: e.message }, { status: 500, headers: CORS_HEADERS });
       }
     }
 
-    // --- ROUTING (Main endpoint) ---
-    if (url.pathname === '/graph-data') {
-      const id = env.SYNAPSE.idFromName('global-state');
-      return env.SYNAPSE.get(id).fetch(request);
+    // --- OAUTH: LIST PROVIDERS ---
+    if (request.method === 'GET' && url.pathname === '/v1/oauth/providers') {
+      const result = await env.DB.prepare(
+        'SELECT id, name, scopes, enabled FROM oauth_providers'
+      ).all();
+      return Response.json({ providers: result.results || [] }, { headers: CORS_HEADERS });
     }
 
+    // --- OAUTH: CONFIGURE PROVIDER ---
+    if (request.method === 'POST' && url.pathname === '/v1/oauth/provider') {
+      const auth = request.headers.get('X-Agent-Secret');
+      if (auth !== env.AGENT_SECRET)
+        return new Response('Unauthorized', { status: 401, headers: CORS_HEADERS });
+      
+      try {
+        const body = await request.json();
+        await env.DB.prepare(`
+          INSERT INTO oauth_providers (id, name, client_id, client_secret, auth_url, token_url, userinfo_url, scopes, enabled)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name, client_id = excluded.client_id, client_secret = excluded.client_secret,
+            auth_url = excluded.auth_url, token_url = excluded.token_url, userinfo_url = excluded.userinfo_url,
+            scopes = excluded.scopes, enabled = excluded.enabled
+        `).bind(
+          body.id, body.name, body.client_id, body.client_secret || '', body.auth_url,
+          body.token_url, body.userinfo_url || '', body.scopes, body.enabled ? 1 : 0
+        ).run();
+        
+        return Response.json({ success: true }, { headers: CORS_HEADERS });
+      } catch (e: any) {
+        return Response.json({ error: e.message }, { status: 400, headers: CORS_HEADERS });
+      }
+    }
+
+    // --- OAUTH: GET LOGIN URL ---
+    if (request.method === 'GET' && url.pathname === '/v1/oauth/login') {
+      const providerId = url.searchParams.get('provider');
+      const redirectUri = url.searchParams.get('redirect_uri');
+      
+      if (!providerId) return Response.json({ error: 'Missing provider' }, { status: 400, headers: CORS_HEADERS });
+      
+      const provider = await env.DB.prepare(
+        'SELECT * FROM oauth_providers WHERE id = ? AND enabled = 1'
+      ).bind(providerId).first() as any;
+      
+      if (!provider) return Response.json({ error: 'Provider not found or disabled' }, { status: 404, headers: CORS_HEADERS });
+      
+      const scopes = JSON.parse(provider.scopes || '[]').join(' ');
+      const state = crypto.randomUUID();
+      
+      const authUrl = new URL(provider.auth_url);
+      authUrl.searchParams.set('client_id', provider.client_id);
+      authUrl.searchParams.set('response_type', 'code');
+      authUrl.searchParams.set('scope', scopes);
+      authUrl.searchParams.set('state', state);
+      if (redirectUri) authUrl.searchParams.set('redirect_uri', redirectUri);
+      
+      return Response.json({ auth_url: authUrl.toString(), state, provider: providerId }, { headers: CORS_HEADERS });
+    }
+
+    // --- OAUTH CORS_HEADERS: CALLBACK ---
+    if (request.method === 'GET' && url.pathname === '/v1/oauth/callback') {
+      const code = url.searchParams.get('code');
+      const providerId = url.searchParams.get('provider');
+      const error = url.searchParams.get('error');
+      
+      if (error) return Response.json({ error }, { headers: CORS_HEADERS });
+      if (!code || !providerId) return Response.json({ error: 'Missing code or provider' }, { status: 400, headers: CORS_HEADERS });
+      
+      const provider = await env.DB.prepare('SELECT * FROM oauth_providers WHERE id = ?').bind(providerId).first() as any;
+      if (!provider) return Response.json({ error: 'Provider not found' }, { status: 404, headers: CORS_HEADERS });
+      
+      try {
+        const tokenRes = await fetch(provider.token_url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'authorization_code', code,
+            client_id: provider.client_id, client_secret: provider.client_secret || '',
+          })
+        });
+        
+        const tokenData = await tokenRes.json();
+        if (!tokenData.access_token) return Response.json({ error: 'Failed to get token', details: tokenData }, { headers: CORS_HEADERS });
+        
+        let userEmail = '', userName = '', providerUserId = '';
+        if (provider.userinfo_url) {
+          const userRes = await fetch(provider.userinfo_url, { headers: { 'Authorization': `Bearer ${tokenData.access_token}` } });
+          const userData = await userRes.json();
+          userEmail = userData.email || userData.mail || '';
+          userName = userData.name || userData.displayName || '';
+          providerUserId = userData.sub || userData.id || '';
+        }
+        
+        if (!userEmail) return Response.json({ error: 'Could not get user email' }, { headers: CORS_HEADERS });
+        
+        await env.DB.prepare(`
+          INSERT INTO users (id, email, name, provider, provider_id, last_login)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(email) DO UPDATE SET name = excluded.name, provider = excluded.provider, provider_id = excluded.provider_id, last_login = excluded.last_login
+        `).bind(crypto.randomUUID(), userEmail, userName, providerId, providerUserId, Math.floor(Date.now() / 1000)).run();
+        
+        const sessionToken = btoa(JSON.stringify({ email: userEmail, provider: providerId, exp: Date.now() + 86400000 }));
+        return Response.json({ token: sessionToken, user: { email: userEmail, name: userName, provider: providerId } }, { headers: CORS_HEADERS });
+      } catch (e: any) {
+        return Response.json({ error: e.message }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    // --- ROUTING ---
     const query = url.searchParams.get('q');
-    if (!query)
-      return new Response('EdgeNeuro SynapseCore Active', { status: 200, headers: CORS_HEADERS });
+    if (!query) return new Response('EdgeNeuro SynapseCore Active', { status: 200, headers: CORS_HEADERS });
 
-    // Get approved agents only
     const agents = await getActiveAgents(env.DB);
-
-    // Default decision
     let decision = { target: 'agent_fallback', confidence: 0.0 };
     
-    // Use LLM if available
     if (env.AI && agents.length > 0) {
       try {
         const response = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
@@ -281,38 +366,17 @@ export default {
     }
 
     const targetAgent = agents.find((a: any) => a.id === decision.target) || agents[0] || { 
-      id: 'agent_fallback', 
-      connection: { url: 'https://support.internal', auth_strategy: 'none' } 
+      id: 'agent_fallback', connection: { url: 'https://support.internal', auth_strategy: 'none' } 
     };
 
-    // Log to Synapse
-    const id = env.SYNAPSE.idFromName('global-state');
-    env.SYNAPSE.get(id).fetch('http://internal/log-route', {
-      method: 'POST',
-      body: JSON.stringify({
-        timestamp: Date.now(),
-        query,
-        target: targetAgent.id,
-        confidence: decision.confidence,
-        protocol: 'a2a/1.0',
-      }),
-    });
-
-    // Output A2A Handoff
     const traceId = crypto.randomUUID();
     return Response.json(
       {
         type: 'a2a/connect',
-        target: {
-          id: targetAgent.id,
-          endpoint: targetAgent.connection.url,
-          auth_headers: { 'X-Guest': 'true' },
-        },
+        target: { id: targetAgent.id, endpoint: targetAgent.connection.url, auth_headers: { 'X-Guest': 'true' } },
         trace_id: traceId,
       },
-      {
-        headers: { ...CORS_HEADERS, 'X-A2A-Version': '1.0', 'X-A2A-Trace-Id': traceId },
-      },
+      { headers: { ...CORS_HEADERS, 'X-A2A-Version': '1.0', 'X-A2A-Trace-Id': traceId } },
     );
   },
 };
