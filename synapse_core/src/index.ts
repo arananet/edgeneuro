@@ -1,10 +1,9 @@
-import { Ai } from '@cloudflare/ai';
 import { SynapseState } from './synapse';
 import { getActiveAgents, buildSystemPrompt } from './registry';
 import { AuthManager } from './auth';
 
 export interface Env {
-  AI: Ai;
+  AI: any;
   SYNAPSE: DurableObjectNamespace;
   AGENT_KV: KVNamespace;
   AGENT_SECRET: string;
