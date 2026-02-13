@@ -9,6 +9,11 @@ binding = "AI"
 binding = "AGENT_KV"
 id = "YOUR_KV_NAMESPACE_ID"
 
+[[d1_databases]]
+binding = "DB"
+database_name = "edgeneuro-db"
+database_id = "YOUR_D1_ID"
+
 [[durable_objects.bindings]]
 name = "SYNAPSE"
 class_name = "SynapseState"
@@ -16,3 +21,7 @@ class_name = "SynapseState"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["SynapseState"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = []

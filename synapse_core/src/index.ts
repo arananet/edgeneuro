@@ -1,11 +1,11 @@
 import { SynapseState } from './synapse';
-import { getActiveAgents, buildSystemPrompt } from './registry';
-import { AuthManager } from './auth';
+import { getActiveAgents, getAllAgents, upsertAgent, approveAgent, getAgent, buildSystemPrompt } from './registry';
 
 export interface Env {
   AI: any;
   SYNAPSE: DurableObjectNamespace;
   AGENT_KV: KVNamespace;
+  DB: D1Database;
   AGENT_SECRET: string;
 }
 
@@ -31,20 +31,21 @@ export default {
       return Response.json({ 
         status: 'ok', 
         ai_enabled: !!env.AI,
-        bindings: { kv: !!env.AGENT_KV, ai: !!env.AI, synapse: !!env.SYNAPSE }
+        d1_enabled: !!env.DB,
+        bindings: { kv: !!env.AGENT_KV, ai: !!env.AI, d1: !!env.DB, synapse: !!env.SYNAPSE }
       }, { headers: CORS_HEADERS });
     }
 
     // --- LIST AGENTS ---
     if (request.method === 'GET' && url.pathname === '/v1/agents') {
-      const allAgents = await getActiveAgents(env.AGENT_KV);
-      return Response.json({ agents: allAgents, count: allAgents.length }, { headers: CORS_HEADERS });
+      const agents = await getAllAgents(env.DB);
+      return Response.json({ agents, count: agents.length }, { headers: CORS_HEADERS });
     }
 
     // --- TEST ROUTING (LLM-powered) ---
     if (request.method === 'GET' && url.pathname === '/v1/test') {
       const query = url.searchParams.get('q') || '';
-      const agents = await getActiveAgents(env.AGENT_KV);
+      const agents = await getActiveAgents(env.DB);
       
       let decision = { target: 'agent_fallback', confidence: 0.0, reason: 'No AI available' };
       
@@ -67,7 +68,7 @@ export default {
               reason: parsed.reason || 'LLM decision'
             };
           }
-        } catch (e) {
+        } catch (e: any) {
           decision.reason = `LLM error: ${e.message}`;
         }
       } else {
@@ -94,24 +95,22 @@ export default {
       }, { headers: CORS_HEADERS });
     }
 
-    // --- REGISTRATION (Protected, persistent) ---
+    // --- REGISTER AGENT (Protected, persistent in D1) ---
     if (request.method === 'POST' && url.pathname === '/v1/agent/register') {
       const auth = request.headers.get('X-Agent-Secret');
       if (auth !== env.AGENT_SECRET)
         return new Response('Unauthorized', { status: 401, headers: CORS_HEADERS });
+      
       try {
         const body = await request.json();
         if (!body.connection) body.connection = {};
         if (!body.connection.auth_strategy) body.connection.auth_strategy = 'bearer';
-        
-        // Default approved=false, but can be set to true
         if (body.approved === undefined) body.approved = false;
         
-        // Store WITHOUT expiration (persistent)
-        await env.AGENT_KV.put(`agent:${body.id}`, JSON.stringify(body));
+        await upsertAgent(env.DB, body);
         return new Response('Registered', { status: 201, headers: CORS_HEADERS });
-      } catch (e) {
-        return new Response('Bad Request', { status: 400, headers: CORS_HEADERS });
+      } catch (e: any) {
+        return new Response(`Bad Request: ${e.message}`, { status: 400, headers: CORS_HEADERS });
       }
     }
 
@@ -124,13 +123,10 @@ export default {
       const agentId = url.searchParams.get('id');
       if (!agentId) return Response.json({ error: 'Missing id' }, { status: 400, headers: CORS_HEADERS });
       
-      const agentData = await env.AGENT_KV.get(`agent:${agentId}`, 'json');
-      if (!agentData) return Response.json({ error: 'Agent not found' }, { status: 404, headers: CORS_HEADERS });
+      await approveAgent(env.DB, agentId);
+      const agent = await getAgent(env.DB, agentId);
       
-      agentData.approved = true;
-      await env.AGENT_KV.put(`agent:${agentId}`, JSON.stringify(agentData));
-      
-      return Response.json({ success: true, agent: agentData }, { headers: CORS_HEADERS });
+      return Response.json({ success: true, agent }, { headers: CORS_HEADERS });
     }
 
     // --- AUTO-DISCOVERY ---
@@ -160,7 +156,7 @@ export default {
           protocolVersion: data.result?.protocolVersion
         }, { headers: CORS_HEADERS });
       } catch (e: any) {
-        return Response.json({ error: e url: targetUrl, mcpSupported: false }, { headers: CORS_HEADERS });
+        return Response.json({ url: targetUrl, error: e.message, mcpSupported: false }, { headers: CORS_HEADERS });
       }
     }
 
@@ -175,8 +171,7 @@ export default {
       return new Response('EdgeNeuro SynapseCore Active', { status: 200, headers: CORS_HEADERS });
 
     // Get approved agents only
-    const allAgents = await getActiveAgents(env.AGENT_KV);
-    const agents = allAgents.filter((a: any) => a.approved !== false);
+    const agents = await getActiveAgents(env.DB);
 
     // Default decision
     let decision = { target: 'agent_fallback', confidence: 0.0 };
