@@ -1,12 +1,13 @@
+#!/bin/bash
 # EdgeNeuro POC Setup Script
 # Run this after deploying SynapseCore
 
-SYNAPSE_URL="https://synapse-core.YOUR_ACCOUNT.workers.dev"
-AGENT_SECRET="YOUR_SECRET"
+SYNAPSE_URL="https://edgeneuro-synapse-core.info-693.workers.dev"
+AGENT_SECRET="potato123"
 
 echo "🔧 Registering mock agents..."
 
-# Register HR Agent
+# Register HR Agent (approved=true for immediate routing)
 curl -X POST "$SYNAPSE_URL/v1/agent/register" \
   -H "Content-Type: application/json" \
   -H "X-Agent-Secret: $AGENT_SECRET" \
@@ -16,14 +17,17 @@ curl -X POST "$SYNAPSE_URL/v1/agent/register" \
     "description": "Handles HR queries",
     "connection": {
       "protocol": "http",
-      "url": "https://test-agent-hr.your-account.workers.dev",
+      "url": "https://test-hr-agent.info-693.workers.dev",
       "auth_strategy": "bearer"
     },
     "capabilities": ["query_pto", "list_benefits"],
-    "intent_triggers": ["vacation", "holiday", "benefits", "sick leave", "pto"]
+    "intent_triggers": ["vacation", "holiday", "benefits", "sick leave", "pto"],
+    "approved": true
   }'
 
-# Register IT Agent
+echo "✅ HR Agent registered"
+
+# Register IT Agent (approved=true for immediate routing)
 curl -X POST "$SYNAPSE_URL/v1/agent/register" \
   -H "Content-Type: application/json" \
   -H "X-Agent-Secret: $AGENT_SECRET" \
@@ -33,21 +37,25 @@ curl -X POST "$SYNAPSE_URL/v1/agent/register" \
     "description": "Technical support",
     "connection": {
       "protocol": "http",
-      "url": "https://test-agent-it.your-account.workers.dev",
+      "url": "https://test-it-agent.info-693.workers.dev",
       "auth_strategy": "bearer"
     },
     "capabilities": ["reset_password", "vpn_issue"],
-    "intent_triggers": ["vpn", "password", "login", "wifi", "computer", "software"]
+    "intent_triggers": ["vpn", "password", "login", "wifi", "computer", "software"],
+    "approved": true
   }'
 
-echo "✅ Agents registered!"
+echo "✅ IT Agent registered"
 
 echo "🧪 Testing routing..."
 
 # Test HR routing
-curl -s "$SYNAPSE_URL?q=I%20need%20vacation" | jq .
+echo "HR Routing:"
+curl -s "$SYNAPSE_URL?q=I%20need%20vacation"
 
-# Test IT routing
-curl -s "$SYNAPSE_URL?q=VPN%20not%20working" | jq .
+echo ""
+echo "IT Routing:"
+curl -s "$SYNAPSE_URL?q=VPN%20not%20working"
 
+echo ""
 echo "🎉 POC Setup Complete!"
