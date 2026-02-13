@@ -99,6 +99,6 @@ export class MCPClient {
     if (!response.ok) return [];
     
     const json = await response.json();
-    return (json.result?.tools || []).map((t: any) => t.name);
+    return (json.result?.tools || []).map((t: { name: string }) => t.name);
   }
 }

@@ -2,7 +2,6 @@ import { Ai } from '@cloudflare/ai';
 import { SynapseState } from './synapse';
 import { getActiveAgents, buildSystemPrompt } from './registry';
 import { AuthManager } from './auth';
-import { MCPClient } from './mcp';
 
 export interface Env {
   AI: Ai;
