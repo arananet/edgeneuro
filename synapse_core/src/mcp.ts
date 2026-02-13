@@ -36,7 +36,7 @@ export class MCPClient {
   headers: Record<string, string>;
   sessionId?: string;
   protocolVersion: string = '2025-11-25';
-  serverCapabilities?: any;
+  serverCapabilities?: Record<string, unknown>;
 
   constructor(url: string, headers: Record<string, string> = {}) {
     this.baseUrl = url.replace(/\/$/, '');
@@ -47,7 +47,7 @@ export class MCPClient {
    * Initialize connection with the MCP Server
    * Per spec: Client sends InitializeRequest, Server responds with InitializeResult
    */
-  async connect(): Promise<any> {
+  async connect(): Promise<unknown> {
     const response = await fetch(`${this.baseUrl}/mcp`, {
       method: 'POST',
       headers: {
@@ -102,20 +102,24 @@ export class MCPClient {
   /**
    * Handle Server-Sent Events for streaming responses
    */
-  private async handleSSE(response: Response): Promise<any> {
+  private async handleSSE(response: Response): Promise<unknown> {
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    let eventId = '';
+    let _eventId = '';
 
     if (!reader) {
       throw new Error('No response body');
     }
 
     try {
-      while (true) {
+      let shouldContinue = true;
+      while (shouldContinue) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          shouldContinue = false;
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -123,7 +127,7 @@ export class MCPClient {
 
         for (const line of lines) {
           if (line.startsWith('id:')) {
-            eventId = line.substring(3).trim();
+            _eventId = line.substring(3).trim();
           } else if (line.startsWith('data:')) {
             const data = line.substring(5).trim();
             try {
@@ -148,7 +152,7 @@ export class MCPClient {
   /**
    * Send a JSON-RPC request
    */
-  private async sendRequest(method: string, params: any): Promise<any> {
+  private async sendRequest(method: string, params: Record<string, unknown>): Promise<unknown> {
     if (!this.sessionId) {
       await this.connect();
     }
@@ -202,14 +206,14 @@ export class MCPClient {
   /**
    * Execute Tool via MCP
    */
-  async callTool(name: string, args: Record<string, unknown>): Promise<any> {
+  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
     return this.sendRequest('tools/call', { name, arguments: args });
   }
 
   /**
    * List available tools
    */
-  async listTools(): Promise<any[]> {
+  async listTools(): Promise<unknown[]> {
     const response = await this.sendRequest('tools/list', {});
     return response.result?.tools || [];
   }
@@ -217,7 +221,7 @@ export class MCPClient {
   /**
    * List available resources
    */
-  async listResources(): Promise<any[]> {
+  async listResources(): Promise<unknown[]> {
     const response = await this.sendRequest('resources/list', {});
     return response.result?.resources || [];
   }
@@ -225,7 +229,7 @@ export class MCPClient {
   /**
    * Read a resource
    */
-  async readResource(uri: string): Promise<any> {
+  async readResource(uri: string): Promise<unknown> {
     return this.sendRequest('resources/read', { uri });
   }
 
