@@ -23,6 +23,7 @@ C4Context
     Person(user, "Enterprise User", "Employees accessing internal tools via Chat/Voice")
 
     System_Boundary(edgeneuro, "EdgeNeuro Ecosystem") {
+        System(controlplane, "Control Plane", "Agent management, testing, evaluation")
         System(cortex, "SynapseCore Router", "Classifies intent and hands off connection")
         System(synapse, "Synapse State", "Visualizes traffic and logs routing decisions")
     }
@@ -68,6 +69,30 @@ sequenceDiagram
 
 ---
 
+## Components
+
+| Component | Description | Deployment |
+|-----------|-------------|------------|
+| **SynapseCore** | Router with intent detection, agent registry, MCP/A2A support | Cloudflare Workers |
+| **Control Plane** | Web UI for agent management, testing, evaluation | Cloudflare Pages |
+| **Test Agents** | Sample HR and IT agents for POC | Cloudflare Workers |
+
+---
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/v1/agents` | GET | List registered agents |
+| `/v1/agent/register` | POST | Register new agent (protected) |
+| `/v1/agent/approve` | POST | Approve agent for routing |
+| `/v1/discover` | GET | Probe MCP endpoint capabilities |
+| `/v1/test` | GET | Test routing with query |
+| `/?q=` | GET | Route query to agent |
+
+---
+
 ## Key Concepts (Validated 2026)
 
 This architecture is based on the latest research in multi-agent orchestration:
@@ -104,10 +129,36 @@ This project follows **GitHub Spec Kit**. See `.spec/` for immutable rules and t
 
 ## Setup
 
-1.  **Install Deps:** `npm install`
-2.  **Deploy SynapseCore:** `cd synapse_core && wrangler deploy`
-3.  **Run Viz:** `cd viz && npm run dev`
+```bash
+# Clone and install
+npm install
+
+# Deploy SynapseCore (Router)
+cd synapse_core
+wrangler deploy
+
+# Deploy Control Plane (Web UI)
+cd ../controlplane
+npm install
+npm run deploy
+```
+
+## Control Plane Features
+
+- **Login** - Username/password authentication
+- **Dashboard** - Health status, orchestrator metrics
+- **Agents** - Register, approve, discover MCP capabilities
+- **Testing** - A2A and MCP protocol testing
+- **Evaluation** - Latency and accuracy metrics
+
+### Demo Accounts
+
+| Username | Password | Role |
+|----------|----------|------|
+| admin | admin123 | Full access |
+| eduardo | edu123 | Operator |
+| operator | operator123 | Read-only |
 
 ## License
 
-MIT
+MIT — Eduardo Arana 2026

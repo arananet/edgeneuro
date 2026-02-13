@@ -1,97 +1,40 @@
-# EdgeNeuro Deployment Tutorial 🚀
-
-This tutorial walks you through deploying EdgeNeuro from scratch.
+# Tutorial 01: Deployment
 
 ## Prerequisites
 
-- Cloudflare account with Workers & AI beta access
-- Node.js 18+ 
-- Python 3.9+ (for fine-tuning)
+- Cloudflare account
+- Wrangler CLI (`npm install -g wrangler`)
 - Git
 
-## Step 1: Clone the Repository
+## Deploy SynapseCore (Router)
 
 ```bash
-git clone https://github.com/arananet/edgeneuro.git
-cd edgeneuro
+cd edgeneuro/synapse_core
+wrangler deploy
 ```
 
-## Step 2: Install Dependencies
+Note the output URL (e.g., `https://edgeneuro-synapse-core.info-693.workers.dev`)
 
-```bash
-npm install
-```
+## Configure Environment
 
-## Step 3: Configure Cloudflare
+Set the agent secret in `wrangler.toml`:
 
-1. Login to Cloudflare:
-```bash
-npx wrangler login
-```
-
-2. Create a KV namespace for the agent registry:
-```bash
-npx wrangler kv:namespace create AGENT_KV
-```
-
-3. Copy the output and add to `synapse_core/wrangler.toml`:
 ```toml
-kv_namespaces = [
-  { binding = "AGENT_KV", id = "YOUR_NAMESPACE_ID" }
-]
+[vars]
+AGENT_SECRET = "your-secret-here"
 ```
 
-4. Add a secret for agent authentication:
-```bash
-npx wrangler secret put AGENT_SECRET
-# Enter a secure random string
-```
-
-## Step 4: Deploy SynapseCore (The Router)
+## Deploy Control Plane
 
 ```bash
-cd synapse_core
-npx wrangler deploy
+cd ../controlplane
+npm install
+npm run deploy
 ```
 
-Expected output:
-```
-🌀  Uploading synapse_core v1.0.0
-✨  Success! Your worker was deployed!
-```
+## Verify Deployment
 
-Copy the worker URL (e.g., `https://synapse-core.your-account.workers.dev`).
-
-## Step 5: Verify Deployment
-
-```bash
-curl https://synapse-core.YOUR_ACCOUNT.workers.dev
-# Expected: "EdgeNeuro SynapseCore Active"
-```
-
-## Step 6: Register Your First Agent
-
-Make a POST request to register an agent:
-
-```bash
-curl -X POST https://synapse-core.YOUR_ACCOUNT.workers.dev/v1/agent/register \
-  -H "Content-Type: application/json" \
-  -H "X-Agent-Secret: YOUR_SECRET" \
-  -d '{
-    "id": "agent_hr",
-    "name": "HR Assistant",
-    "connection": {
-      "protocol": "http",
-      "url": "https://hr-service.internal.com/mcp",
-      "auth_strategy": "bearer"
-    },
-    "capabilities": ["query_pto", "list_benefits"],
-    "intent_triggers": ["vacation", "holiday", "benefits"]
-  }'
-```
-
-## Next Steps
-
-- [Fine-tuning the Intent Detection Model](./02-fine-tuning.md)
-- [Configuration Guide](./03-configuration.md)
-- [Testing & Evaluation](./04-testing-evaluation.md)
+1. Visit Control Plane URL
+2. Login with demo account (admin/admin123)
+3. Check Dashboard for health status
+4. Register a test agent in Agents page
