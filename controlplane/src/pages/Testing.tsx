@@ -6,7 +6,8 @@ export default function Testing() {
   const [testType, setTestType] = useState<'a2a' | 'mcp'>('a2a')
   const [a2aQuery, setA2aQuery] = useState('')
   const [mcpUrl, setMcpUrl] = useState('')
-  const [mcpSecret, setMcpSecret] = useState('potato123')
+  const [mcpSecret, setMcpSecret] = useState('')
+  const [mcpAuth, setMcpAuth] = useState<'none' | 'bearer' | 'oauth2'>('none')
   const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
@@ -24,37 +25,50 @@ export default function Testing() {
   }
 
   const testMCP = async () => {
+    if (!mcpUrl) return
+    
     setLoading(true)
     setResult(null)
+    
     try {
-      const proxyUrl = `${ORCHESTRATOR_URL}/proxy-mcp?url=${encodeURIComponent(mcpUrl)}`
-      const res = await fetch(proxyUrl, {
+      // Build auth headers based on selected auth type
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream',
+        'MCP-Protocol-Version': '2025-11-25',
+      }
+      
+      if (mcpAuth === 'bearer' && mcpSecret) {
+        headers['Authorization'] = `Bearer ${mcpSecret}`
+      } else if (mcpAuth === 'oauth2' && mcpSecret) {
+        headers['Authorization'] = `Bearer ${mcpSecret}`
+      }
+      
+      const body = JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-11-25',
+          capabilities: { tools: {} },
+          clientInfo: { name: 'EdgeNeuro-Test', version: '1.0.0' }
+        }
+      })
+      
+      // Direct fetch to MCP server (bypass proxy for better control)
+      const res = await fetch(mcpUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json, text/event-stream',
-          'MCP-Protocol-Version': '2025-11-25',
-          'X-Agent-Secret': mcpSecret
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'initialize',
-          params: {
-            protocolVersion: '2025-11-25',
-            capabilities: { tools: {} },
-            clientInfo: { name: 'EdgeNeuro-Test', version: '1.0.0' }
-          }
-        })
+        headers,
+        body
       })
       
       const contentType = res.headers.get('content-type') || ''
+      const text = await res.text()
+      
       let data: any
       
-      if (contentType.includes('text/event-stream')) {
-        // Handle SSE response
-        const text = await res.text()
-        // Parse SSE format: "data: {...}\n\n"
+      if (contentType.includes('text/event-stream') || text.startsWith('event:')) {
+        // Parse SSE format
         const lines = text.split('\n')
         let jsonStr = ''
         for (const line of lines) {
@@ -64,17 +78,16 @@ export default function Testing() {
           }
         }
         try {
-          data = JSON.parse(jsonStr)
+          data = jsonStr ? JSON.parse(jsonStr) : { raw: text, format: 'sse' }
         } catch {
-          data = { raw: text, format: 'sse' }
+          data = { raw: text, format: 'sse-parse-error' }
         }
       } else {
-        // Handle JSON response
-        const text = await res.text()
+        // Try JSON
         try {
           data = JSON.parse(text)
         } catch {
-          data = { raw: text, error: 'Invalid JSON' }
+          data = { raw: text, error: 'Invalid JSON', contentType }
         }
       }
       
@@ -84,7 +97,7 @@ export default function Testing() {
         ...data
       })
     } catch (e: any) {
-      setResult({ error: e.message })
+      setResult({ error: e.message, hint: 'Check URL and auth settings' })
     }
     setLoading(false)
   }
@@ -106,7 +119,7 @@ export default function Testing() {
             className={testType === 'mcp' ? 'btn btn-primary' : 'btn btn-secondary'}
             onClick={() => setTestType('mcp')}
           >
-            MCP Client
+            MCP Server
           </button>
         </div>
       </div>
@@ -137,13 +150,14 @@ export default function Testing() {
       {testType === 'mcp' && (
         <div className="card">
           <div className="card-header">
-            <h3 className="card-title">MCP Client Test</h3>
+            <h3 className="card-title">MCP Server Test</h3>
           </div>
           <p style={{ marginBottom: '15px', color: 'var(--text-secondary)' }}>
-            Test an MCP server endpoint (proxied through orchestrator). Supports both JSON and SSE responses.
+            Test an MCP server endpoint directly. Supports auth: none, bearer, oauth2.
           </p>
+          
           <div className="form-group">
-            <label className="form-label">MCP Endpoint URL</label>
+            <label className="form-label">MCP Server URL</label>
             <input
               className="form-input"
               value={mcpUrl}
@@ -151,17 +165,36 @@ export default function Testing() {
               placeholder="https://mcp.example.com/mcp"
             />
           </div>
-          <div className="form-group">
-            <label className="form-label">Agent Secret</label>
-            <input
-              type="password"
-              className="form-input"
-              value={mcpSecret}
-              onChange={e => setMcpSecret(e.target.value)}
-            />
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+            <div className="form-group">
+              <label className="form-label">Auth Type</label>
+              <select 
+                className="form-select"
+                value={mcpAuth}
+                onChange={e => setMcpAuth(e.target.value as any)}
+              >
+                <option value="none">None</option>
+                <option value="bearer">Bearer Token</option>
+                <option value="oauth2">OAuth 2.0</option>
+              </select>
+            </div>
+            
+            <div className="form-group">
+              <label className="form-label">Token / Secret</label>
+              <input
+                type="password"
+                className="form-input"
+                value={mcpSecret}
+                onChange={e => setMcpSecret(e.target.value)}
+                placeholder={mcpAuth === 'none' ? 'Not needed' : 'Enter token...'}
+                disabled={mcpAuth === 'none'}
+              />
+            </div>
           </div>
+          
           <button className="btn btn-primary" onClick={testMCP} disabled={loading || !mcpUrl}>
-            {loading ? 'Testing...' : 'Test MCP'}
+            {loading ? 'Testing...' : 'Test MCP Server'}
           </button>
         </div>
       )}
