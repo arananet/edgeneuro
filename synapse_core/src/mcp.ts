@@ -106,7 +106,6 @@ export class MCPClient {
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    let _eventId = '';
 
     if (!reader) {
       throw new Error('No response body');
@@ -127,7 +126,8 @@ export class MCPClient {
 
         for (const line of lines) {
           if (line.startsWith('id:')) {
-            _eventId = line.substring(3).trim();
+            // Store eventId for potential resumption
+            // line.substring(3).trim();
           } else if (line.startsWith('data:')) {
             const data = line.substring(5).trim();
             try {
