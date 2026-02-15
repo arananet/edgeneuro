@@ -101,21 +101,38 @@ flowchart TD
 - **Predictable:** Every decision is traceable and auditable
 - **No Ambiguity:** No "maybe" - explicit allow or deny
 
-### Neuro + Symbolic: Two Layers
+### Neuro-Symbolic: The Correct Architecture
+
+```mermaid
+flowchart TD
+    Q[User Query] --> S1[SYMBOLIC: Intent Detection]
+    S1 -->|Knowledge Graph Taxonomy| I[Intent: IT_VPN]
+    I --> N[NEURAL: LLM Validation]
+    N -->|Optional, low confidence| A[SIMPLE: Role-Based Access]
+    A --> D{Allowed?}
+    D -->|Yes| R[Route to Agent]
+    D -->|No| E[Denied + Alternatives]
+    
+    style S1 fill:#98FB98
+    style N fill:#87CEEB
+    style A fill:#FFE4B5
+```
 
 | Layer | Component | Purpose |
 |-------|-----------|---------|
-| **Neural** | LLM (Llama-3) | Detect user intent (what they want) |
-| **Symbolic** | Knowledge Graph | Enforce permissions (what they CAN have) |
+| **Symbolic** | Knowledge Graph Intent Taxonomy | Detect intent using explicit rules |
+| **Neural** | LLM (Llama-3) | Validate/confirm intent (optional) |
+| **Simple** | Role-Based Access Control | Check if role can access category |
 
 ### How It Works
 
 1. **User Query** → Sent to SynapseCore
-2. **Neural Layer** → LLM classifies intent (e.g., "PAYROLL")
-3. **Symbolic Layer** → Knowledge Graph queries permission paths
-4. **Decision** → ALLOW (route to agent) or DENY (with alternatives)
+2. **SYMBOLIC** → Knowledge Graph matches keywords → Intent (e.g., "IT_VPN")
+3. **NEURAL** → LLM validates intent (only if confidence < 90%)
+4. **SIMPLE** → Role-based category access check
+5. **Decision** → Route to agent OR Deny with alternatives
 
-### 🕸️ Knowledge Graph (Symbolic Layer)
+### 🕸️ Knowledge Graph (Symbolic Intent Taxonomy)
 
 ```mermaid
 flowchart LR
@@ -209,10 +226,46 @@ const ACCESS_POLICY = {
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
+| `/v1/symbolic/intent` | GET | **Neuro-Symbolic Intent Detection** (NEW!) |
 | `/v1/symbolic/policy` | GET | Get access policy + Knowledge Graph stats |
 | `/v1/symbolic/graph` | GET | Query Knowledge Graph directly |
 | `/v1/symbolic/evaluate` | POST | Evaluate single access request |
 | `/v1/symbolic/route` | GET | Full neuro-symbolic routing |
+
+### Example: Neuro-Symbolic Intent Detection
+
+```
+GET /v1/symbolic/intent?q=my%20vpn%20is%20not%20working&role=EMPLOYEE
+```
+
+```json
+{
+  "architecture": {
+    "description": "Neuro-Symbolic Intent Detection + Simple Access Control",
+    "step1_symbolic": {
+      "component": "Knowledge Graph Intent Taxonomy",
+      "intents": 21,
+      "output": {
+        "intent": "IT_VPN",
+        "category": "IT",
+        "confidence": 0.95,
+        "reasoning": "Symbolic resolution: keyword_match"
+      }
+    },
+    "step2_neural": "skipped (high confidence)",
+    "step3_simple_access": {
+      "userRole": "EMPLOYEE",
+      "category": "IT",
+      "canAccess": true
+    }
+  },
+  "query": "my vpn is not working",
+  "intent": "IT_VPN",
+  "confidence": 0.95,
+  "category": "IT",
+  "allowed": true
+}
+```
 
 ### Example: Query Knowledge Graph
 
