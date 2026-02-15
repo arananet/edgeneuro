@@ -313,16 +313,22 @@ This architecture is based on the latest research in multi-agent orchestration:
 | **Deployment** | Edge (Cloudflare Workers) | Centralized Cloud | Centralized Cloud | Self-hosted |
 | **Architecture** | Stateless "Hot Potato" | Stateful Proxy | Stateful Proxy | Stateful Proxy |
 | **Intent Detection** | Fine-tuned SLM (<50ms) | Generic LLM | Generic LLM | Custom LLM |
+| **Access Control** | **Neuro-Symbolic + KG** | Role-based | Role-based | Basic |
+| **Security Model** | **Default Deny + Capabilities** | Allow by default | Allow by default | Basic |
 | **Protocols** | A2A + MCP | MCP (since 2025) | Proprietary | MCP (partial) |
 | **Scaling** | Infinite (ephemeral) | Limited by cloud | Limited by cloud | Limited by infra |
 | **Source** | Open Source | Proprietary | Proprietary | Open Source |
 | **Cost** | Pay-per-request | Enterprise license | Enterprise license | Infrastructure |
 
 **Key Differentiators:**
-- **Edge-First:** Runs on Cloudflare's global network, closest to users.
-- **Hot Potato Pattern:** Router introduces client to agent and leaves; no proxy bottleneck.
-- **Standards-Based:** Built on A2A and MCP for interoperability.
-- **Fine-tuned SLM:** Uses small models optimized for routing intent, not general conversation.
+- **Neuro-Symbolic Architecture:** Combines LLM intent detection with Knowledge Graph-based access control
+- **Default Deny:** Most secure approach - if no explicit permission, access is blocked
+- **Capability-Based:** Dynamic permissions (e.g., HAS_VALID_TICKET, MANAGER_APPROVED)
+- **Explainable:** Every access decision includes reasoning path from Knowledge Graph
+- **Edge-First:** Runs on Cloudflare's global network, closest to users
+- **Hot Potato Pattern:** Router introduces client to agent and leaves; no proxy bottleneck
+- **Standards-Based:** Built on A2A and MCP for interoperability
+- **Fine-tuned SLM:** Uses small models optimized for routing intent, not general conversation
 
 ---
 
