@@ -353,7 +353,7 @@ GET /v1/symbolic/route?q=show%20payroll%20data&role=MARKETING
 
 This architecture is based on the latest research in multi-agent orchestration:
 
-1.  **SLMs for Intent Detection:** Using Small Language Models (like Llama-3-8B) at the edge for routing is a validated pattern for achieving <100ms latency. [Reference](https://arxiv.org/abs/2601.17156)
+1.  **Neuro-Symbolic Intent Detection:** Using Knowledge Graph taxonomy for explicit, auditable intent classification. LLM is only used for optional validation, not primary detection.
 2.  **A2A Protocol:** We implement the Agent-to-Agent standard for interoperability.
 3.  **Ephemeral/Stateless Routers:** By keeping the orchestrator stateless, we support infinite scaling and eliminate single points of failure.
 
@@ -365,7 +365,7 @@ This architecture is based on the latest research in multi-agent orchestration:
 |---------|-----------|-------------------------|------------------------|---------|
 | **Deployment** | Edge (Cloudflare Workers) | Centralized Cloud | Centralized Cloud | Self-hosted |
 | **Architecture** | Stateless "Hot Potato" | Stateful Proxy | Stateful Proxy | Stateful Proxy |
-| **Intent Detection** | Fine-tuned SLM (<50ms) | Generic LLM | Generic LLM | Custom LLM |
+| **Intent Detection** | **Knowledge Graph Taxonomy** | Generic LLM | Generic LLM | Custom LLM |
 | **Access Control** | **Neuro-Symbolic + KG** | Role-based | Role-based | Basic |
 | **Security Model** | **Default Deny + Capabilities** | Allow by default | Allow by default | Basic |
 | **Protocols** | A2A + MCP | MCP (since 2025) | Proprietary | MCP (partial) |
@@ -381,7 +381,6 @@ This architecture is based on the latest research in multi-agent orchestration:
 - **Edge-First:** Runs on Cloudflare's global network, closest to users
 - **Hot Potato Pattern:** Router introduces client to agent and leaves; no proxy bottleneck
 - **Standards-Based:** Built on A2A and MCP for interoperability
-- **Fine-tuned SLM:** Uses small models optimized for routing intent, not general conversation
 
 ---
 
