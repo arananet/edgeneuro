@@ -1,5 +1,9 @@
 import { SynapseState } from './synapse';
 import { getActiveAgents, getAllAgents, upsertAgent, approveAgent, getAgent, buildSystemPrompt } from './registry';
+import { SymbolicEngine, DEFAULT_ACCESS_POLICY, TOPIC_ALIASES, KnowledgeGraph, kgAccessEngine } from './symbolic-engine';
+
+// Re-export for external use
+export { SymbolicEngine, DEFAULT_ACCESS_POLICY, TOPIC_ALIASES, KnowledgeGraph, kgAccessEngine };
 
 export interface Env {
   AI: any;
@@ -340,6 +344,247 @@ export default {
       } catch (e: any) {
         return Response.json({ error: e.message }, { status: 500, headers: CORS_HEADERS });
       }
+    }
+
+    // =========================================================================
+    // NEURO-SYMBOLIC ACCESS CONTROL
+    // =========================================================================
+    // This section implements the SYMBOLIC layer of our neuro-symbolic architecture
+    // 
+    // PRINCIPLE: Default Deny (Privilege Minimal)
+    // - If no explicit permission exists, access is DENIED
+    // - This provides deterministic, auditable access decisions
+    //
+    // NEURAL + SYMBOLIC:
+    // - Neural: LLM detects user intent (what they want)
+    // - Symbolic: Engine enforces access policy (what they CAN have)
+    // =========================================================================
+
+    // --- SYMBOLIC: Get Access Policy (with Knowledge Graph) ---
+    if (request.method === 'GET' && url.pathname === '/v1/symbolic/policy') {
+      const engine = new SymbolicEngine();
+      const kg = engine.getKnowledgeGraph();
+      
+      return Response.json({
+        // Architecture info
+        architecture: {
+          type: 'NEURO-SYMBOLIC',
+          neural_layer: 'LLM Intent Detection (Llama-3)',
+          symbolic_layer: 'Knowledge Graph Access Control',
+          principle: 'DEFAULT_DENY',
+          knowledge_graph: {
+            nodes: kg.getStats().nodes,
+            edges: kg.getStats().edges,
+            roles: kg.getStats().roles,
+            topics: kg.getStats().topics
+          }
+        },
+        // Legacy policy (for compatibility)
+        policy: engine.getPolicy(),
+        aliases: TOPIC_ALIASES,
+        description: 'Neuro-symbolic access control using Knowledge Graph. If no path exists in graph from user role to topic, access is DENIED.',
+        // Knowledge graph structure
+        graph_stats: kg.getStats(),
+        roles: kg.getNodesByType('ROLE').map(n => ({ id: n.id, name: n.name })),
+        topics: kg.getNodesByType('TOPIC').map(n => ({ id: n.id, name: n.name, sensitivity: n.properties.sensitivity }))
+      }, { headers: CORS_HEADERS });
+    }
+
+    // --- SYMBOLIC: Query Knowledge Graph ---
+    // Direct graph queries for debugging and inspection
+    if (request.method === 'GET' && url.pathname === '/v1/symbolic/graph') {
+      const role = url.searchParams.get('role');
+      const topic = url.searchParams.get('topic');
+      const engine = new SymbolicEngine();
+      const kg = engine.getKnowledgeGraph();
+      
+      // If role specified, show what it can access
+      if (role) {
+        const accessible = kg.queryAccessibleTopics(`role:${role}`);
+        return Response.json({
+          query: 'accessible_topics',
+          role,
+          accessible_topics: accessible.map(a => ({
+            topic: a.topic,
+            access_level: a.level,
+            path: a.path.nodes.map(n => n.name).join(' → ')
+          }))
+        }, { headers: CORS_HEADERS });
+      }
+      
+      // If both specified, query specific access
+      if (role && topic) {
+        const result = kg.queryAccess(`role:${role}`, `topic:${topic}`);
+        return Response.json({
+          query: 'access_check',
+          role,
+          topic,
+          has_access: result.paths.length > 0,
+          explanation: result.explanation,
+          paths: result.paths.map(p => ({
+            nodes: p.nodes.map(n => n.name),
+            edges: p.edges.map(e => e.type),
+            weight: p.totalWeight
+          }))
+        }, { headers: CORS_HEADERS });
+      }
+      
+      // Otherwise return graph stats
+      return Response.json({
+        query: 'graph_stats',
+        stats: kg.getStats(),
+        roles: kg.getNodesByType('ROLE').map(n => ({ id: n.id, name: n.name })),
+        topics: kg.getNodesByType('TOPIC').map(n => ({ id: n.id, name: n.name }))
+      }, { headers: CORS_HEADERS });
+    }
+
+    // --- SYMBOLIC: Evaluate Access (Pure Symbolic) ---
+    if (request.method === 'POST' && url.pathname === '/v1/symbolic/evaluate') {
+      try {
+        const body = await request.json();
+        const { topic, userRole, userGroups } = body;
+        
+        if (!topic || !userRole) {
+          return Response.json({ 
+            error: 'Missing required fields: topic, userRole' 
+          }, { status: 400, headers: CORS_HEADERS });
+        }
+        
+        const engine = new SymbolicEngine();
+        const userProfile = {
+          userId: 'anonymous',
+          email: '',
+          role: userRole,
+          department: '',
+          groups: userGroups || []
+        };
+        
+        const decision = engine.evaluateAccess(topic, userProfile);
+        
+        return Response.json({
+          ...decision,
+          // Include alternatives for UX
+          alternatives: decision.alternatives.slice(0, 5)
+        }, { headers: CORS_HEADERS });
+        
+      } catch (e: any) {
+        return Response.json({ error: e.message }, { status: 400, headers: CORS_HEADERS });
+      }
+    }
+
+    // --- SYMBOLIC: Full Neuro-Symbolic Routing ---
+    // This combines LLM intent detection (NEURAL) with policy enforcement (SYMBOLIC)
+    if (request.method === 'GET' && url.pathname === '/v1/symbolic/route') {
+      const query = url.searchParams.get('q') || '';
+      const userRole = url.searchParams.get('role') || 'EMPLOYEE';
+      const userGroups = url.searchParams.get('groups')?.split(',') || [];
+      
+      // Step 1: NEURAL - Detect intent using LLM
+      let intent = {
+        topic: 'GENERAL_SUPPORT',
+        confidence: 0.5,
+        reasoning: 'Fallback - no LLM'
+      };
+      
+      if (env.AI) {
+        try {
+          const response = await env.AI.run('env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL', {
+            messages: [
+              { 
+                role: 'system', 
+                content: `You are an intent classifier. Classify the user query into one of these topics: PAYROLL, BENEFITS, PERFORMANCE_REVIEWS, FINANCE_DASHBOARD, BUDGET, EXPENSES, INVOICES, SALES_REPORTS, CUSTOMER_DATA, PIPELINE, IT_TICKETS, IT_HARDWARE, IT_VPN, IT_SECURITY, ENGINEERING_WIKI, CODE_REPOS, INFRASTRUCTURE, MARKETING_CAMPAIGNS, MARKETING_ANALYTICS, BRAND_ASSETS, HR_POLICIES, COMPANY_DIRECTORY, ANNOUNCEMENTS, ONBOARDING, ADMIN_PANEL, GENERAL_SUPPORT. Reply with JSON: {"topic": "TOPIC", "confidence": 0.0-1.0, "reasoning": "brief explanation"}` 
+              },
+              { role: 'user', content: query }
+            ]
+          });
+          
+          const jsonMatch = response.response?.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            intent = {
+              topic: parsed.topic || 'GENERAL_SUPPORT',
+              confidence: parsed.confidence || 0.5,
+              reasoning: parsed.reasoning || 'LLM classification'
+            };
+          }
+        } catch (e: any) {
+          intent.reasoning = `LLM error: ${e.message}`;
+        }
+      }
+      
+      // Step 2: SYMBOLIC - Evaluate access policy
+      const engine = new SymbolicEngine();
+      const userProfile = {
+        userId: 'anonymous',
+        email: '',
+        role: userRole,
+        department: '',
+        groups: userGroups
+      };
+      
+      const access = engine.evaluateAccess(intent.topic, userProfile);
+      
+      // Step 3: Build response
+      const agents = await getActiveAgents(env.DB);
+      const agentMapping: Record<string, string> = {};
+      for (const agent of agents) {
+        // Map topics based on agent name/type
+        const name = agent.name?.toLowerCase() || '';
+        if (name.includes('hr')) agentMapping['BENEFITS'] = agent.id;
+        if (name.includes('it')) agentMapping['IT_TICKETS'] = agent.id;
+        if (name.includes('sql') || name.includes('data')) agentMapping['SALES_REPORTS'] = agent.id;
+      }
+      agentMapping['GENERAL_SUPPORT'] = agents[0]?.id || 'agent_fallback';
+      
+      const target = access.decision === 'ALLOW' 
+        ? (agentMapping[access.topic] || agentMapping['GENERAL_SUPPORT'])
+        : null;
+      
+      return Response.json({
+        // Neuro-Symbolic architecture info
+        architecture: {
+          neural: {
+            component: 'LLM Intent Detection',
+            model: env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL,
+            output: intent
+          },
+          symbolic: {
+            component: 'Knowledge Graph Access Engine',
+            principle: 'DEFAULT_DENY',
+            knowledge_graph: {
+              nodes: engine.getStats().nodes,
+              edges: engine.getStats().edges
+            },
+            output: {
+              decision: access.decision,
+              reason: access.reason,
+              graph_reasoning: access.graphReasoning || 'No path found in knowledge graph',
+              auditId: access.auditId
+            }
+          }
+        },
+        
+        // Access decision
+        allowed: access.decision === 'ALLOW',
+        target,
+        
+        // For denied requests - UX suggestions
+        ...(access.decision === 'DENY' && {
+          alternatives: access.alternatives.slice(0, 5),
+          suggestions: [
+            `Your role (${userRole}) does not have access to ${access.topic}`,
+            'You can access: ' + access.alternatives.slice(0, 3).join(', '),
+            'Contact your manager to request access'
+          ]
+        }),
+        
+        // Metadata
+        query,
+        userRole,
+        resolvedTopic: access.topic,
+        timestamp: new Date().toISOString()
+        
+      }, { headers: CORS_HEADERS });
     }
 
     // --- ROUTING ---

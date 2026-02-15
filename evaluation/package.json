@@ -1,0 +1,21 @@
+{
+  "name": "edgeneuro-evaluation",
+  "version": "1.0.0",
+  "description": "Honest evaluation framework for EdgeNeuro orchestrator",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "eval:baseline": "tsx src/run-baseline.ts",
+    "eval:stress": "tsx src/run-stress.ts",
+    "eval:report": "tsx src/generate-report.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^1.6.1"
+  },
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
