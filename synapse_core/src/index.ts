@@ -1,9 +1,11 @@
 import { SynapseState } from './synapse';
 import { getActiveAgents, getAllAgents, upsertAgent, approveAgent, getAgent, buildSystemPrompt } from './registry';
 import { SymbolicEngine, DEFAULT_ACCESS_POLICY, TOPIC_ALIASES, KnowledgeGraph, kgAccessEngine } from './symbolic-engine';
+import { SymbolicIntentDetector, INTENT_TAXONOMY, IntentCategory } from './intent-taxonomy';
 
 // Re-export for external use
 export { SymbolicEngine, DEFAULT_ACCESS_POLICY, TOPIC_ALIASES, KnowledgeGraph, kgAccessEngine };
+export { SymbolicIntentDetector, INTENT_TAXONOMY, IntentCategory };
 
 export interface Env {
   AI: any;
@@ -435,6 +437,120 @@ export default {
         stats: kg.getStats(),
         roles: kg.getNodesByType('ROLE').map(n => ({ id: n.id, name: n.name })),
         topics: kg.getNodesByType('TOPIC').map(n => ({ id: n.id, name: n.name }))
+      }, { headers: CORS_HEADERS });
+    }
+
+    // =========================================================================
+    // NEURO-SYMBOLIC INTENT DETECTION (NEW ARCHITECTURE)
+    // =========================================================================
+    // 
+    // ARCH    // Step ITECTURE:
+1: SYMBOLIC Intent Detection (Knowledge Graph taxonomy)
+    // Step 2: NEURAL Validation (LLM confirms intent)  
+    // Step 3: SIMPLE Access Control (role-based)
+    //
+    // This is the CORRECT architecture: Neuro-Symbolic for INTENT, Simple for Access
+    // =========================================================================
+
+    // --- NEURO-SYMBOLIC: Intent Detection ---
+    if (request.method === 'GET' && url.pathname === '/v1/symbolic/intent') {
+      const query = url.searchParams.get('q') || '';
+      const userRole = url.searchParams.get('role') || 'EMPLOYEE';
+      
+      // Step 1: SYMBOLIC - Intent detection using Knowledge Graph taxonomy
+      const detector = new SymbolicIntentDetector();
+      const context = {
+        userId: 'anonymous',
+        role: userRole,
+        department: '',
+        sessionActive: true
+      };
+      const detected = detector.detect(query, context);
+      
+      // Step 2: NEURAL - Optional LLM validation (only if low confidence)
+      let neuralValidation = null;
+      if (env.AI && detected.confidence < 0.9) {
+        try {
+          const response = await env.AI.run('env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL', {
+            messages: [
+              { 
+                role: 'system', 
+                content: `Validate intent. Query: "${query}". Detected: ${detected.intent}. Reply with JSON: {"valid": true/false, "correct": "INTENT", "confidence": 0.0-1.0}` 
+              },
+              { role: 'user', content: query }
+            ]
+          });
+          
+          const jsonMatch = response.response?.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (parsed.valid) {
+              neuralValidation = {
+                validated: true,
+                intent: parsed.correct || detected.intent,
+                confidence: parsed.confidence
+              };
+            }
+          }
+        } catch (e) {
+          // Continue with symbolic detection
+        }
+      }
+      
+      // Use validated intent if available
+      const finalIntent = neuralValidation?.intent || detected.intent;
+      const finalConfidence = neuralValidation?.confidence || detected.confidence;
+      
+      // Step 3: SIMPLE Access Control - Role-based
+      const roleCategories: Record<string, string[]> = {
+        'IT_ADMIN': ['IT', 'SECURITY', 'ENGINEERING', 'GENERAL'],
+        'HR_ADMIN': ['HR', 'GENERAL'],
+        'SALES': ['SALES', 'GENERAL'],
+        'MARKETING': ['MARKETING', 'SALES', 'GENERAL'],
+        'FINANCE': ['FINANCE', 'GENERAL'],
+        'ENGINEERING': ['ENGINEERING', 'IT', 'GENERAL'],
+        'ADMIN': ['IT', 'HR', 'SALES', 'FINANCE', 'MARKETING', 'ENGINEERING', 'SECURITY', 'GENERAL'],
+        'EMPLOYEE': ['IT', 'HR', 'GENERAL'],
+        'CONTRACTOR': ['IT', 'GENERAL']
+      };
+      
+      const allowedCategories = roleCategories[userRole] || ['IT', 'GENERAL'];
+      const canAccess = allowedCategories.includes(detected.category);
+      
+      return Response.json({
+        architecture: {
+          description: 'Neuro-Symbolic Intent Detection + Simple Access Control',
+          step1_symbolic: {
+            component: 'Knowledge Graph Intent Taxonomy',
+            intents: detector.getStats().total,
+            output: detected
+          },
+          step2_neural: {
+            component: 'LLM Validation (optional)',
+            model: env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL,
+            output: neuralValidation || 'skipped (high confidence)'
+          },
+          step3_simple_access: {
+            component: 'Role-Based Access',
+            userRole,
+            category: detected.category,
+            canAccess,
+            allowedCategories
+          }
+        },
+        
+        // Result
+        query,
+        intent: finalIntent,
+        confidence: finalConfidence,
+        category: detected.category,
+        allowed: canAccess,
+        
+        metadata: {
+          taxonomy_stats: detector.getStats(),
+          timestamp: new Date().toISOString()
+        }
+        
       }, { headers: CORS_HEADERS });
     }
 
