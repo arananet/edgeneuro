@@ -79,26 +79,21 @@ sequenceDiagram
 
 ---
 
-## 🧠 Neuro-Symbolic Architecture (2026)
+## 🧠 Neuro-Symbolic Architecture
 
 EdgeNeuro implements a **Neuro-Symbolic** approach to access control, combining the best of neural networks and symbolic AI.
 
 ### The Principle: Default Deny (Privilege Minimal)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    DEFAULT DENY 🚫                          │
-├─────────────────────────────────────────────────────────────┤
-│  User Query → Intent Detection → Policy Evaluation         │
-│                              ↓                             │
-│              ┌───────────────────────────────┐             │
-│              │ EXPLICIT PERMISSION EXISTS?   │             │
-│              └───────────────────────────────┘             │
-│                    ↓              ↓                        │
-│                   YES              NO                       │
-│                    ↓              ↓                        │
-│              [ALLOW]          [DENY 🚫]                   │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[User Query] --> B[Intent Detection]
+    B --> C{Knowledge Graph}
+    C -->|Path Found| D[ALLOW ✓]
+    C -->|No Path| E[DENY 🚫]
+    
+    style D fill:#90EE90
+    style E fill:#FFB6C1
 ```
 
 **Why Default Deny?**
@@ -111,7 +106,7 @@ EdgeNeuro implements a **Neuro-Symbolic** approach to access control, combining 
 | Layer | Component | Purpose |
 |-------|-----------|---------|
 | **Neural** | LLM (Llama-3) | Detect user intent (what they want) |
-| **Symbolic** | Access Policy Engine | Enforce permissions (what they CAN have) |
+| **Symbolic** | Knowledge Graph | Enforce permissions (what they CAN have) |
 
 ### How It Works
 
@@ -122,30 +117,71 @@ EdgeNeuro implements a **Neuro-Symbolic** approach to access control, combining 
 
 ### 🕸️ Knowledge Graph (Symbolic Layer)
 
-```
-    ┌──────────┐         ┌─────────┐         ┌─────────┐
-    │   USER   │────────▶│   ROLE  │────────▶│ TOPIC  │
-    └──────────┘         └─────────┘         └─────────┘
-         │                    │                    │
-         │                    │ CAN_ACCESS         │
-         │                    │                    │
-         │                    ▼                    │
-         │              ┌─────────┐               │
-         └────────────▶│PERMISSION│◀─────────────┘
-                       └─────────┘
-                            │
-                   ┌────────┴────────┐
-                   │                 │
-                   ▼                 ▼
-             [ALLOW]            [DENY]
+```mermaid
+flowchart LR
+    subgraph User
+        U[User]
+    end
+    
+    subgraph Attributes
+        A1[HAS_ROLE]
+        A2[HAS_SESSION]
+        A3[VALID_TICKET]
+    end
+    
+    subgraph Entity
+        R[ROLE]
+        C[CAPABILITY]
+    end
+    
+    subgraph Resource
+        T[TOPIC]
+    end
+    
+    U --> A1
+    U --> A2
+    U --> A3
+    
+    A1 --> R
+    R -->|CAN_ACCESS| T
+    A2 --> C
+    C -->|ENABLES| T
+    A3 --> C
+    
+    style T fill:#E6E6FA
+    style R fill:#FFE4B5
+    style C fill:#98FB98
 ```
 
 **Knowledge Graph Features:**
-- **Nodes:** USER, ROLE, GROUP, TOPIC, AGENT, RULE
-- **Edges:** HAS_ROLE, CAN_ACCESS, MEMBER_OF, ROUTES_TO
-- **Queryable:** Find all paths from role to topic
+- **Node Types:** USER, ROLE, **CAPABILITY**, GROUP, TOPIC, AGENT, RULE
+- **Edge Types:** HAS_ROLE, **HAS_SESSION**, **VALID_TICKET**, CAN_ACCESS, MEMBER_OF, ROUTES_TO
+- **Capability-Based:** Dynamic permissions (e.g., HAS_ACTIVE_SESSION, VALID_TICKET)
+- **Queryable:** Find all paths from user to topic
 - **Explainable:** Every decision includes the reasoning path
 - **Dynamic:** Can update permissions without code changes
+
+### Capability-Based Access Control
+
+Instead of fixed roles, EdgeNeuro uses **dynamic capabilities**:
+
+```typescript
+// User can have capabilities beyond their role
+const userCapabilities = [
+  'HAS_ACTIVE_SESSION',    // User is logged in
+  'VALID_TICKET',          // User has open IT ticket
+  'MANAGER_APPROVED',     // Manager approved access
+  'SECURITY_CLEARED'      // Passed security check
+];
+```
+
+**Example Path with Capabilities:**
+```
+USER → HAS_SESSION → EMPLOYEE → CAN_ACCESS → IT_TICKETS
+USER → VALID_TICKET → CAN_ACCESS → IT_HARDWARE
+```
+
+This makes access control **truly scalable** and **agnostic** - capabilities can be granted/removed dynamically without changing roles.
 
 ### Security Model
 

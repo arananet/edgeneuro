@@ -42,7 +42,7 @@
 /**
  * Node types in the knowledge graph
  */
-export type NodeType = 'USER' | 'ROLE' | 'GROUP' | 'TOPIC' | 'AGENT' | 'RULE';
+export type NodeType = 'USER' | 'ROLE' | 'GROUP' | 'TOPIC' | 'AGENT' | 'RULE' | 'CAPABILITY';
 
 /**
  * Edge types (relationships) in the knowledge graph
@@ -50,12 +50,15 @@ export type NodeType = 'USER' | 'ROLE' | 'GROUP' | 'TOPIC' | 'AGENT' | 'RULE';
 export type EdgeType = 
   | 'HAS_ROLE'          // USER → ROLE
   | 'MEMBER_OF'         // USER → GROUP
-  | 'CAN_ACCESS'        // ROLE → TOPIC (with access level)
+  | 'HAS_CAPABILITY'    // USER → CAPABILITY (dynamic!)
+  | 'GRANTED_BY'        // CAPABILITY → USER (who granted it)
+  | 'CAN_ACCESS'        // ROLE/CAPABILITY → TOPIC (with access level)
+  | 'REQUIRES'          // TOPIC requires CAPABILITY
   | 'MEMBER_OF_GROUP'   // GROUP → GROUP (nested groups)
   | 'HAS_PERMISSION'    // USER → TOPIC (direct permission)
   | 'DEFINED_BY'        // RULE → ROLE/TOPIC
   | 'ROUTES_TO'         // TOPIC → AGENT
-  | 'REQUIRES';         // TOPIC → TOPIC (dependency)
+  | 'EXPIRES_AT';       // CAPABILITY → timestamp
 
 /**
  * Access level enum
@@ -245,6 +248,55 @@ export class KnowledgeGraph {
         id: `edge:${perm.role}:${perm.topic}`,
         type: 'CAN_ACCESS',
         source: perm.role,
+        target: perm.topic,
+        properties: { accessLevel: perm.level },
+        createdAt: Date.now()
+      });
+    }
+
+    // =========================================================================
+    // CAPABILITY NODES (Dynamic Permissions)
+    // =========================================================================
+    // Capabilities represent dynamic states that can be granted/removed
+    // This makes access control truly scalable and agnostic
+    
+    const capabilities = [
+      { id: 'cap:HAS_ACTIVE_SESSION', name: 'HAS_ACTIVE_SESSION', description: 'User has valid login session' },
+      { id: 'cap:VALID_TICKET', name: 'VALID_TICKET', description: 'User has open support ticket' },
+      { id: 'cap:MANAGER_APPROVED', name: 'MANAGER_APPROVED', description: 'Manager approved access' },
+      { id: 'cap:SECURITY_CLEARED', name: 'SECURITY_CLEARED', description: 'Passed security check' },
+      { id: 'cap:CONTRACT_SIGNED', name: 'CONTRACT_SIGNED', description: 'Contractor has signed agreement' },
+      { id: 'cap:ONBOARDING_COMPLETE', name: 'ONBOARDING_COMPLETE', description: 'Completed onboarding process' },
+      { id: 'cap:TRAINING_DONE', name: 'TRAINING_DONE', description: 'Completed required training' },
+      { id: 'cap:VPN_ENABLED', name: 'VPN_ENABLED', description: 'VPN access enabled' },
+    ];
+
+    for (const cap of capabilities) {
+      this.addNode({
+        id: cap.id,
+        type: 'CAPABILITY',
+        name: cap.name,
+        properties: { description: cap.description },
+        createdAt: Date.now()
+      });
+    }
+
+    // Capability-based permissions (access granted through capabilities)
+    const capabilityPermissions: Array<{ capability: string; topic: string; level: AccessLevel }> = [
+      { capability: 'cap:VALID_TICKET', topic: 'topic:IT_HARDWARE', level: 'READ' },
+      { capability: 'cap:VPN_ENABLED', topic: 'topic:IT_VPN', level: 'WRITE' },
+      { capability: 'cap:MANAGER_APPROVED', topic: 'topic:PAYROLL', level: 'READ' },
+      { capability: 'cap:SECURITY_CLEARED', topic: 'topic:CUSTOMER_DATA', level: 'READ' },
+      { capability: 'cap:CONTRACT_SIGNED', topic: 'topic:GENERAL_SUPPORT', level: 'READ' },
+      { capability: 'cap:ONBOARDING_COMPLETE', topic: 'topic:HR_POLICIES', level: 'READ' },
+      { capability: 'cap:TRAINING_DONE', topic: 'topic:CODE_REPOS', level: 'READ' },
+    ];
+
+    for (const perm of capabilityPermissions) {
+      this.addEdge({
+        id: `edge:${perm.capability}:${perm.topic}`,
+        type: 'CAN_ACCESS',
+        source: perm.capability,
         target: perm.topic,
         properties: { accessLevel: perm.level },
         createdAt: Date.now()
@@ -464,12 +516,111 @@ export class KnowledgeGraph {
   /**
    * Get graph statistics
    */
-  getStats(): { nodes: number; edges: number; roles: number; topics: number } {
+  getStats(): { nodes: number; edges: number; roles: number; topics: number; capabilities: number } {
     return {
       nodes: this.nodes.size,
       edges: this.edges.size,
       roles: this.getNodesByType('ROLE').length,
-      topics: this.getNodesByType('TOPIC').length
+      topics: this.getNodesByType('TOPIC').length,
+      capabilities: this.getNodesByType('CAPABILITY').length
+    };
+  }
+
+  // =========================================================================
+  // CAPABILITY MANAGEMENT
+  // =========================================================================
+
+  /**
+   * Get all capability nodes
+   */
+  getCapabilities(): KGNode[] {
+    return this.getNodesByType('CAPABILITY');
+  }
+
+  /**
+   * Grant a capability to a user (dynamic permission)
+   */
+  grantCapability(userId: string, capabilityId: string, expiresAt?: number): void {
+    const capabilityNode = this.nodes.get(capabilityId);
+    if (!capabilityNode || capabilityNode.type !== 'CAPABILITY') {
+      throw new Error(`Invalid capability: ${capabilityId}`);
+    }
+
+    // Create HAS_CAPABILITY edge
+    this.addEdge({
+      id: `edge:${userId}:${capabilityId}`,
+      type: 'HAS_CAPABILITY',
+      source: userId,
+      target: capabilityId,
+      properties: { 
+        grantedAt: Date.now(),
+        expiresAt: expiresAt || null
+      },
+      createdAt: Date.now()
+    });
+  }
+
+  /**
+   * Revoke a capability from a user
+   */
+  revokeCapability(userId: string, capabilityId: string): void {
+    const edgeId = `edge:${userId}:${capabilityId}`;
+    this.edges.delete(edgeId);
+    
+    // Remove from indexes
+    const outEdges = this.outEdges.get(userId) || [];
+    this.outEdges.set(userId, outEdges.filter(e => e.id !== edgeId));
+  }
+
+  /**
+   * Check if user has a specific capability
+   */
+  hasCapability(userId: string, capabilityId: string): boolean {
+    const outEdges = this.getOutEdges(userId);
+    return outEdges.some(e => e.type === 'HAS_CAPABILITY' && e.target === capabilityId);
+  }
+
+  /**
+   * Get all capabilities for a user
+   */
+  getUserCapabilities(userId: string): KGNode[] {
+    const outEdges = this.getOutEdges(userId).filter(e => e.type === 'HAS_CAPABILITY');
+    return outEdges.map(e => this.nodes.get(e.target)).filter(Boolean) as KGNode[];
+  }
+
+  /**
+   * Query access including capabilities (role + capabilities)
+   * This is the CORE access evaluation that considers BOTH roles AND capabilities
+   */
+  queryAccessWithCapabilities(userId: string, roleId: string, topicId: string): KGQueryResult {
+    const paths: KGPath[] = [];
+    
+    // Path 1: Through role
+    const rolePaths = this.findPaths(roleId, topicId);
+    paths.push(...rolePaths);
+    
+    // Path 2: Through capabilities
+    const userOutEdges = this.getOutEdges(userId).filter(e => e.type === 'HAS_CAPABILITY');
+    for (const capEdge of userOutEdges) {
+      const capPaths = this.findPaths(capEdge.target, topicId);
+      // Prepend user node to path
+      for (const path of capPaths) {
+        path.nodes.unshift(this.nodes.get(userId)!);
+        path.edges.unshift(capEdge);
+      }
+      paths.push(...capPaths);
+    }
+    
+    const accessEdges = paths.flatMap(p => p.edges).filter(e => e.type === 'CAN_ACCESS');
+    const hasAccess = accessEdges.length > 0;
+    const accessLevel = hasAccess ? accessEdges[0].properties.accessLevel : 'NONE';
+    
+    return {
+      nodes: paths.flatMap(p => p.nodes),
+      paths,
+      explanation: hasAccess
+        ? `Access granted via: ${paths.map(p => p.nodes.map(n => n.name).join(' → ')).join(' OR ')}`
+        : `No access path found from user ${userId} (role: ${roleId}) to topic ${topicId}`
     };
   }
 }
@@ -489,22 +640,82 @@ export class KGAccessEngine {
   }
 
   /**
-   * Evaluate access request using graph reasoning
+   * Evaluate access request using graph reasoning (with capabilities!)
    */
-  evaluateAccess(userRole: string, requestedTopic: string): KGAccessDecision {
+  evaluateAccess(userRole: string, requestedTopic: string, userId?: string): KGAccessDecision {
     const auditId = `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     // Normalize IDs
     const roleId = userRole.startsWith('role:') ? userRole : `role:${userRole}`;
     const topicId = requestedTopic.startsWith('topic:') ? requestedTopic : `topic:${requestedTopic}`;
+    const actualUserId = userId || 'anonymous';
     
-    // Query the knowledge graph
-    const result = this.graph.queryAccess(roleId, topicId);
+    // Query the knowledge graph - now with capabilities!
+    let result;
+    if (userId) {
+      // Use capability-aware query
+      result = this.graph.queryAccessWithCapabilities(actualUserId, roleId, topicId);
+    } else {
+      // Fallback to role-only query
+      result = this.graph.queryAccess(roleId, topicId);
+    }
     
     if (result.paths.length > 0) {
       const path = result.paths[0];
       const edge = path.edges.find(e => e.type === 'CAN_ACCESS');
       const accessLevel = edge?.properties.accessLevel || 'READ';
+      
+      // Determine if access was via capability
+      const viaCapability = path.nodes.some(n => n.type === 'CAPABILITY');
+      
+      return {
+        decision: 'ALLOW',
+        reason: result.explanation,
+        path,
+        topic: requestedTopic,
+        userRole,
+        alternatives: this.getAlternatives(userRole),
+        auditId,
+        graphReasoning: viaCapability 
+          ? `Access granted via CAPABILITY: ${result.explanation}`
+          : `Access granted via ROLE: ${result.explanation}`
+      };
+    }
+    
+    // DEFAULT DENY - No path found in knowledge graph
+    return {
+      decision: 'DENY',
+      reason: `No explicit permission found. ${result.explanation}`,
+      path: null,
+      topic: requestedTopic,
+      userRole,
+      alternatives: this.getAlternatives(userRole),
+      auditId,
+      graphReasoning: result.explanation
+    };
+  }
+
+  /**
+   * Grant a capability to a user (for dynamic permissions)
+   */
+  grantCapability(userId: string, capabilityId: string, expiresAt?: number): void {
+    this.graph.grantCapability(userId, capabilityId, expiresAt);
+  }
+
+  /**
+   * Revoke a capability from a user
+   */
+  revokeCapability(userId: string, capabilityId: string): void {
+    this.graph.revokeCapability(userId, capabilityId);
+  }
+
+  /**
+   * Check user's capabilities
+   */
+  getUserCapabilities(userId: string): string[] {
+    const caps = this.graph.getUserCapabilities(userId);
+    return caps.map(c => c.name);
+  }
       
       return {
         decision: 'ALLOW',
