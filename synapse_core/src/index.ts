@@ -23,17 +23,61 @@ export { SynapseState };
 const DEFAULT_ROUTING_MODEL = '@cf/meta/llama-3.2-1b-instruct';
 
 // ============================================================================
-// NEURO-SYMBOLIC ROUTING ENGINE
+// NEURO-SYMBOLIC ROUTING ENGINE (TRUE IMPLEMENTATION)
 // ============================================================================
-// This is the core routing logic that combines:
-// - NEURAL: LLM for intent detection
-// - SYMBOLIC: Knowledge Graph for access control + agent resolution
+// 
+// ARCHITECTURE:
+// 
+//    User Query
+//         │
+//         ▼
+//    ┌─────────────────────────────────────────┐
+//    │  NEURAL LAYER (LLM)                     │
+//    │  - Detect user intent                   │
+//    │  - Extract topic from query            │
+//    │  - Returns: topic, confidence           │
+//    └─────────────────────────────────────────┘
+//         │
+//         ▼ (intent.topic)
+//    ┌─────────────────────────────────────────┐
+//    │  SYMBOLIC LAYER (Knowledge Graph)       │
+//    │  - Evaluate access policy               │
+//    │  - Check role → topic permissions      │
+//    │  - Principle: DEFAULT DENY             │
+//    │  - Returns: ALLOW/DENY, reason         │
+//    └─────────────────────────────────────────┘
+//         │
+//         ▼ (if ALLOW)
+//    ┌─────────────────────────────────────────┐
+//    │  RESOLVE AGENT                          │
+//    │  - Map topic → agent                   │
+//    │  - Return agent endpoint               │
+//    └─────────────────────────────────────────┘
+//
 // ============================================================================
 
-interface RoutingDecision {
-  target: string;
-  confidence: number;
-  reason: string;
+interface NeuroSymbolicResult {
+  // What user wants (Neural)
+  intent: {
+    topic: string;
+    confidence: number;
+    reasoning: string;
+  };
+  
+  // What user can have (Symbolic)
+  access: {
+    decision: 'ALLOW' | 'DENY';
+    reason: string;
+    userRole: string;
+    alternatives: string[];
+  };
+  
+  // Final routing
+  allowed: boolean;
+  target: string | null;
+  agentEndpoint: string | null;
+  
+  // Architecture metadata
   architecture: {
     neural: boolean;
     symbolic: boolean;
@@ -42,63 +86,47 @@ interface RoutingDecision {
 }
 
 /**
- * Unified Neuro-Symbolic Routing
+ * TRUE Neuro-Symbolic Routing
  * 
- * Flow:
- * 1. Try DB intent_rules (fastest - symbolic keyword match)
- * 2. Try LLM intent detection (neural)
- * 3. Validate with Knowledge Graph (symbolic)
- * 4. Return final decision
+ * Step 1: NEURAL - LLM detects intent
+ * Step 2: SYMBOLIC - KG evaluates access (DEFAULT DENY)
+ * Step 3: RESOLVE - Map topic to agent
  */
 async function neuroSymbolicRouting(
   query: string,
   agents: any[],
-  env: Env
-): Promise<RoutingDecision> {
-  const defaultDecision: RoutingDecision = {
-    target: 'agent_fallback',
-    confidence: 0.0,
-    reason: 'No routing match',
+  env: Env,
+  userRole: string = 'EMPLOYEE'
+): Promise<NeuroSymbolicResult> {
+  const defaultResult: NeuroSymbolicResult = {
+    intent: { topic: 'GENERAL_SUPPORT', confidence: 0, reasoning: 'No intent detected' },
+    access: { decision: 'DENY', reason: 'No matching rules', userRole, alternatives: [] },
+    allowed: false,
+    target: null,
+    agentEndpoint: null,
     architecture: { neural: false, symbolic: false, method: 'fallback' }
   };
 
   // =========================================================================
-  // STEP 1: SYMBOLIC - DB Intent Rules (fastest, deterministic)
+  // STEP 1: NEURAL - LLM Intent Detection
   // =========================================================================
-  try {
-    const rulesResult = await env.DB.prepare(`
-      SELECT * FROM intent_rules WHERE enabled = 1 ORDER BY priority ASC
-    `).all();
-    
-    const rules = rulesResult.results as any[];
-    for (const rule of rules) {
-      const pattern = new RegExp(rule.pattern, 'i');
-      if (pattern.test(query)) {
-        // Verify agent exists
-        if (agents.find(a => a.id === rule.agent_id)) {
-          return {
-            target: rule.agent_id,
-            confidence: 0.9,
-            reason: `Intent rule match: ${rule.pattern}`,
-            architecture: { neural: false, symbolic: true, method: 'db_rules' }
-          };
-        }
-      }
-    }
-  } catch (e) {
-    // DB rules failed, continue to LLM
-  }
-
-  // =========================================================================
-  // STEP 2: NEURAL - LLM Intent Detection
-  // =========================================================================
+  let detectedIntent = { topic: 'GENERAL_SUPPORT', confidence: 0.5 };
+  
   if (env.AI && agents.length > 0) {
     const modelId = await getRoutingModel(env.DB);
     
     try {
       const response = await env.AI.run(modelId, {
         messages: [
-          { role: 'system', content: buildSystemPrompt(agents) },
+          { 
+            role: 'system', 
+            content: `You are an intent classifier. Classify the query into one of these topics:
+IT_TICKETS, IT_VPN, IT_HARDWARE, IT_SECURITY, IT_PASSWORD,
+PAYROLL, BENEFITS, PERFORMANCE_REVIEWS, HIRING, ONBOARDING,
+SALES_REPORTS, CUSTOMER_DATA, PIPELINE, INVOICES, EXPENSES,
+MARKETING_CAMPAIGNS, ENGINEERING_WIKI, CODE_REPOS, GENERAL_SUPPORT.
+Reply with JSON: {"topic": "TOPIC", "confidence": 0.0-1.0}`
+          },
           { role: 'user', content: query }
         ]
       });
@@ -107,49 +135,88 @@ async function neuroSymbolicRouting(
         const jsonMatch = response.response.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
-          const llmTarget = parsed.target || 'agent_fallback';
-          const llmConfidence = parsed.confidence || 0.5;
-
-          // Verify agent exists
-          if (agents.find(a => a.id === llmTarget)) {
-            // =========================================================================
-            // STEP 3: SYMBOLIC - Validate with Knowledge Graph
-            // =========================================================================
-            // For now, accept LLM decision if agent exists
-            // TODO: Integrate with access_rules for role-based filtering
-            return {
-              target: llmTarget,
-              confidence: llmConfidence,
-              reason: parsed.reason || 'LLM decision',
-              architecture: { neural: true, symbolic: false, method: 'llm' }
-            };
-          }
+          detectedIntent = {
+            topic: parsed.topic || 'GENERAL_SUPPORT',
+            confidence: parsed.confidence || 0.5
+          };
         }
       }
-    } catch (e: any) {
-      // LLM failed, continue to fallback
+    } catch (e) {
+      // LLM failed, continue with default intent
     }
   }
 
   // =========================================================================
-  // STEP 4: FALLBACK - Agent intent_triggers (symbolic keyword match)
+  // STEP 2: SYMBOLIC - Knowledge Graph Access Control
   // =========================================================================
-  const queryLower = query.toLowerCase();
+  const engine = new SymbolicEngine();
+  const userProfile = {
+    userId: 'anonymous',
+    email: '',
+    role: userRole,
+    department: '',
+    groups: []
+  };
+  
+  const accessDecision = engine.evaluateAccess(detectedIntent.topic, userProfile);
+  
+  // If DENY, return immediately with alternatives
+  if (accessDecision.decision === 'DENY') {
+    return {
+      intent: { ...detectedIntent, reasoning: 'LLM intent detection' },
+      access: {
+        decision: 'DENY',
+        reason: accessDecision.reason,
+        userRole: userRole,
+        alternatives: accessDecision.alternatives
+      },
+      allowed: false,
+      target: null,
+      agentEndpoint: null,
+      architecture: { neural: true, symbolic: true, method: 'kg_default_deny' }
+    };
+  }
+
+  // =========================================================================
+  // STEP 3: RESOLVE - Map topic to agent
+  // =========================================================================
+  // Build topic → agent mapping from active agents
+  const topicToAgent: Record<string, string> = {};
   for (const agent of agents) {
-    const triggers = agent.intent_triggers || [];
-    for (const trigger of triggers) {
-      if (queryLower.includes(trigger.toLowerCase())) {
-        return {
-          target: agent.id,
-          confidence: 0.8,
-          reason: `Keyword match: ${trigger}`,
-          architecture: { neural: false, symbolic: true, method: 'agent_triggers' }
-        };
-      }
+    const name = agent.name?.toLowerCase() || agent.id.toLowerCase();
+    if (name.includes('hr')) {
+      topicToAgent['PAYROLL'] = agent.id;
+      topicToAgent['BENEFITS'] = agent.id;
+      topicToAgent['PERFORMANCE_REVIEWS'] = agent.id;
+      topicToAgent['HIRING'] = agent.id;
+      topicToAgent['ONBOARDING'] = agent.id;
+    }
+    if (name.includes('it')) {
+      topicToAgent['IT_TICKETS'] = agent.id;
+      topicToAgent['IT_VPN'] = agent.id;
+      topicToAgent['IT_HARDWARE'] = agent.id;
+      topicToAgent['IT_SECURITY'] = agent.id;
+      topicToAgent['IT_PASSWORD'] = agent.id;
     }
   }
-
-  return defaultDecision;
+  topicToAgent['GENERAL_SUPPORT'] = 'agent_fallback';
+  
+  const targetAgentId = topicToAgent[detectedIntent.topic] || 'agent_fallback';
+  const targetAgent = agents.find((a: any) => a.id === targetAgentId);
+  
+  return {
+    intent: { ...detectedIntent, reasoning: 'LLM intent detection' },
+    access: {
+      decision: 'ALLOW',
+      reason: 'Access granted by Knowledge Graph',
+      userRole: userRole,
+      alternatives: []
+    },
+    allowed: true,
+    target: targetAgentId,
+    agentEndpoint: targetAgent?.connection?.url || null,
+    architecture: { neural: true, symbolic: true, method: 'neuro_symbolic' }
+  };
 }
 
 // ============================================================================
@@ -552,24 +619,29 @@ export default {
       return Response.json({ agents, count: agents.length }, { headers: CORS_HEADERS });
     }
 
-    // --- TEST ROUTING (Neuro-Symbolic) ---
+    // --- TEST ROUTING (True Neuro-Symbolic) ---
     if (request.method === 'GET' && url.pathname === '/v1/test') {
       const query = url.searchParams.get('q') || '';
+      const userRole = url.searchParams.get('role') || 'EMPLOYEE';
       const agents = await getActiveAgents(env.DB);
       const modelId = await getRoutingModel(env.DB);
       const startTime = Date.now();
       
-      // Use Neuro-Symbolic routing
-      const routingResult = await neuroSymbolicRouting(query, agents, env);
+      // Use TRUE Neuro-Symbolic routing
+      const result = await neuroSymbolicRouting(query, agents, env, userRole);
       
       return Response.json({
         query,
+        allowed: result.allowed,
         decision: {
-          target: routingResult.target,
-          confidence: routingResult.confidence,
-          reason: routingResult.reason
+          target: result.target,
+          confidence: result.intent.confidence,
+          reason: result.access.reason
         },
-        architecture: routingResult.architecture,
+        // Full Neuro-Symbolic architecture info
+        intent: result.intent,
+        access: result.access,
+        architecture: result.architecture,
         model_used: modelId,
         agents_available: agents.map((a: any) => a.id),
         latency_ms: Date.now() - startTime
@@ -1177,24 +1249,21 @@ export default {
       }, { headers: CORS_HEADERS });
     }
 
-    // --- ROUTING --- (Main entry point - Neuro-Symbolic)
+    // --- ROUTING --- (Main entry point - True Neuro-Symbolic)
     const query = url.searchParams.get('q');
+    const userRole = url.searchParams.get('role') || 'EMPLOYEE';
     if (!query) return new Response('EdgeNeuro SynapseCore Active', { status: 200, headers: CORS_HEADERS });
 
     const agents = await getActiveAgents(env.DB);
     const startTime = Date.now();
     
-    // Use Neuro-Symbolic routing
-    const routingResult = await neuroSymbolicRouting(query, agents, env);
+    // Use TRUE Neuro-Symbolic routing
+    const routingResult = await neuroSymbolicRouting(query, agents, env, userRole);
     
-    const targetAgent = agents.find((a: any) => a.id === routingResult.target) || agents[0] || { 
-      id: 'agent_fallback', connection: { url: 'https://support.internal', auth_strategy: 'none' } 
-    };
-
     // Log the routing decision
     await logRequest(env.DB, {
-      level: 'INFO',
-      type: 'routing',
+      level: routingResult.allowed ? 'INFO' : 'WARN',
+      type: routingResult.allowed ? 'routing' : 'access_denied',
       prompt: query,
       response: JSON.stringify(routingResult),
       agent_id: routingResult.target,
@@ -1202,14 +1271,44 @@ export default {
     });
 
     const traceId = crypto.randomUUID();
+    
+    // If access DENIED - return error with alternatives
+    if (!routingResult.allowed) {
+      return Response.json(
+        {
+          type: 'access_denied',
+          decision: {
+            target: null,
+            confidence: 0,
+            reason: 'Access DENIED by Knowledge Graph'
+          },
+          architecture: routingResult.architecture,
+          access: routingResult.access,
+          trace_id: traceId,
+          _debug: {
+            intent: routingResult.intent,
+            latency_ms: Date.now() - startTime
+          }
+        },
+        { status: 403, headers: { ...CORS_HEADERS, 'X-A2A-Trace-Id': traceId } }
+      );
+    }
+
+    // Access ALLOWED - route to agent
+    const targetAgent = agents.find((a: any) => a.id === routingResult.target) || agents[0] || { 
+      id: 'agent_fallback', connection: { url: 'https://support.internal', auth_strategy: 'none' } 
+    };
+
     return Response.json(
       {
         type: 'a2a/connect',
         target: { id: targetAgent.id, endpoint: targetAgent.connection.url, auth_headers: { 'X-Guest': 'true' } },
         trace_id: traceId,
-        // Debug info showing Neuro-Symbolic architecture
+        // Full Neuro-Symbolic debug info
         _debug: {
-          decision: routingResult,
+          intent: routingResult.intent,
+          access: routingResult.access,
+          architecture: routingResult.architecture,
           model_used: await getRoutingModel(env.DB),
           latency_ms: Date.now() - startTime
         }
