@@ -142,10 +142,6 @@ export default function Settings() {
     // Fetch available models from worker
     fetchModels()
   }, [])
-        }
-      })
-      .catch(() => {})
-  }, [])
 
   const handleModelSelect = (modelId: string) => {
     setSelectedModel(modelId)
