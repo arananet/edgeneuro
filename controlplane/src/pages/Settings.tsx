@@ -45,10 +45,26 @@ const ROLES = ['EMPLOYEE', 'MANAGER', 'HR', 'IT', 'FINANCE', 'ADMIN']
 const ORCHESTRATOR_URL = 'https://edgeneuro-synapse-core.info-693.workers.dev'
 const AGENT_SECRET = 'potato123'
 
+// Cloudflare API types
+interface CloudflareModel {
+  id: string
+  name: string
+  description?: string
+  task?: string
+  source?: string
+}
+
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState<'models' | 'neurosymbolic' | 'rules'>('models')
+  const [activeTab, setActiveTab] = useState<'models' | 'neurosymbolic' | 'rules' | 'cloudflare'>('models')
   const [models, setModels] = useState<ModelConfig[]>([])
   const [selectedModel, setSelectedModel] = useState('')
+
+  // Cloudflare Config
+  const [cfAccountId, setCfAccountId] = useState('')
+  const [cfApiToken, setCfApiToken] = useState('')
+  const [cfModels, setCfModels] = useState<CloudflareModel[]>([])
+  const [cfLoading, setCfLoading] = useState(false)
+  const [cfError, setCfError] = useState('')
 
   // Neuro Symbolic Config
   const [neuroConfig, setNeuroConfig] = useState<NeuroSymbolicConfig>({
@@ -111,6 +127,14 @@ export default function Settings() {
         { id: '5', role: 'FINANCE', topic: 'payroll:*', access_level: 'ADMIN', enabled: true },
       ])
     }
+
+    // Load Cloudflare config
+    const savedCfConfig = localStorage.getItem('cloudflare_config')
+    if (savedCfConfig) {
+      const config = JSON.parse(savedCfConfig)
+      setCfAccountId(config.account_id || '')
+      setCfApiToken(config.api_token || '')
+    }
   }, [])
 
   const handleModelSelect = (modelId: string) => {
@@ -125,6 +149,54 @@ export default function Settings() {
     const updated = { ...neuroConfig, [key]: value }
     setNeuroConfig(updated)
     localStorage.setItem('neuro_symbolic_config', JSON.stringify(updated))
+  }
+
+  // Cloudflare Handlers
+  const saveCloudflareConfig = () => {
+    localStorage.setItem('cloudflare_config', JSON.stringify({
+      account_id: cfAccountId,
+      api_token: cfApiToken
+    }))
+    setCfError('')
+  }
+
+  const fetchCloudflareModels = async () => {
+    if (!cfAccountId || !cfApiToken) {
+      setCfError('Please enter Account ID and API Token')
+      return
+    }
+
+    setCfLoading(true)
+    setCfError('')
+
+    try {
+      const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/ai/models/search?per_page=50`, {
+        headers: {
+          'Authorization': `Bearer ${cfApiToken}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      if (data.success && data.result) {
+        // Filter to text generation models only
+        const textModels = data.result.filter((m: any) => 
+          m.task === 'text-generation' || m.task === 'chat' || m.id.includes('llama') || m.id.includes('gemma') || m.id.includes('mistral')
+        )
+        setCfModels(textModels)
+      } else {
+        throw new Error(data.errors?.[0]?.message || 'Failed to fetch models')
+      }
+    } catch (err: any) {
+      setCfError(err.message || 'Failed to fetch models')
+      setCfModels([])
+    }
+
+    setCfLoading(false)
   }
 
   // Intent Rules Handlers
@@ -196,6 +268,12 @@ export default function Settings() {
           onClick={() => setActiveTab('rules')}
         >
           📋 Rules
+        </button>
+        <button
+          className={activeTab === 'cloudflare' ? 'btn btn-primary' : 'btn btn-secondary'}
+          onClick={() => setActiveTab('cloudflare')}
+        >
+          ☁️ Cloudflare
         </button>
       </div>
 
@@ -591,6 +669,94 @@ export default function Settings() {
             </div>
           )}
         </>
+      )}
+
+      {/* Cloudflare Tab */}
+      {activeTab === 'cloudflare' && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">☁️ Cloudflare AI Configuration</h3>
+          </div>
+
+          <p style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
+            Configure your Cloudflare account to fetch available AI models. These models are used for intent classification and routing.
+          </p>
+
+          <div style={{ display: 'grid', gap: '20px' }}>
+            {/* API Credentials */}
+            <div className="form-group">
+              <label className="form-label">Cloudflare Account ID</label>
+              <input
+                type="text"
+                className="form-input"
+                value={cfAccountId}
+                onChange={e => setCfAccountId(e.target.value)}
+                placeholder="023e105f4ecef8ad9ca31a8372d0c353"
+              />
+              <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#666' }}>
+                Find in Cloudflare Dashboard → Overview → Account ID
+              </p>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Cloudflare API Token</label>
+              <input
+                type="password"
+                className="form-input"
+                value={cfApiToken}
+                onChange={e => setCfApiToken(e.target.value)}
+                placeholder="Bearer token with Workers AI Read permission"
+              />
+              <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#666' }}>
+                Create in Cloudflare Dashboard → Profile → API Tokens → Create Custom Token
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button className="btn btn-secondary" onClick={saveCloudflareConfig}>
+                Save Credentials
+              </button>
+              <button 
+                className="btn btn-primary" 
+                onClick={fetchCloudflareModels}
+                disabled={cfLoading || !cfAccountId || !cfApiToken}
+              >
+                {cfLoading ? 'Fetching Models...' : 'Fetch Available Models'}
+              </button>
+            </div>
+
+            {cfError && (
+              <div style={{ padding: '10px', background: '#f8d7da', color: '#721c24', borderRadius: '4px' }}>
+                <strong>Error:</strong> {cfError}
+              </div>
+            )}
+          </div>
+
+          {/* Available Models */}
+          {cfModels.length > 0 && (
+            <div style={{ marginTop: '30px' }}>
+              <h4 style={{ marginBottom: '15px' }}>Available Models ({cfModels.length})</h4>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Model ID</th>
+                    <th>Task</th>
+                    <th>Source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cfModels.map(model => (
+                    <tr key={model.id}>
+                      <td><code>{model.id}</code></td>
+                      <td>{model.task || '-'}</td>
+                      <td>{model.source || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
 
       {/* AI Gateway Status - Always visible */}
