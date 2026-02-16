@@ -1,28 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
-
-// Simple cache with TTL
-const cache: Record<string, { data: any; expires: number }> = {}
-const CACHE_TTL = 30000 // 30 seconds
-
-function getCached<T>(key: string): T | null {
-  const entry = cache[key]
-  if (entry && entry.expires > Date.now()) {
-    return entry.data as T
-  }
-  return null
-}
-
-function setCached<T>(key: string, data: T): void {
-  cache[key] = { data, expires: Date.now() + CACHE_TTL }
-}
-
-function clearCache(key?: string): void {
-  if (key) {
-    delete cache[key]
-  } else {
-    Object.keys(cache).forEach(k => delete cache[k])
-  }
-}
+import { useState, useEffect } from 'react'
 
 interface ModelConfig {
   id: string
@@ -105,70 +81,53 @@ export default function Settings() {
   const [showRuleForm, setShowRuleForm] = useState(false)
   const [editingRule, setEditingRule] = useState<{ type: 'intent' | 'access', data?: IntentRule | AccessRule } | null>(null)
 
-  // Load all config from worker on mount (with 30s cache)
+  // Load all config from worker on mount
   useEffect(() => {
-    // Check cache first
-    const cachedModel = getCached<{ model_id: string }>('config_model')
-    if (cachedModel) {
-      setSelectedModel(cachedModel.model_id)
-    } else {
-      fetch(`${ORCHESTRATOR_URL}/v1/config/model`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.model_id) {
-            setSelectedModel(data.model_id)
-            setCached('config_model', data)
-          }
-        })
-        .catch(() => {})
-    }
+    // Load current model config from worker
+    fetch(`${ORCHESTRATOR_URL}/v1/config/model`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.model_id) {
+          setSelectedModel(data.model_id)
+        }
+      })
+      .catch(() => {})
 
-    const cachedNeuro = getCached<{ config: NeuroSymbolicConfig }>('config_neuro')
-    if (cachedNeuro) {
-      setNeuroConfig(cachedNeuro.config)
-    } else {
-      fetch(`${ORCHESTRATOR_URL}/v1/config/neuro`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.config) {
-            setNeuroConfig(data.config)
-            setCached('config_neuro', data)
-          }
-        })
-        .catch(() => {})
-    }
+    // Load neuro symbolic config from worker
+    fetch(`${ORCHESTRATOR_URL}/v1/config/neuro`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.config) {
+          setNeuroConfig(data.config)
+        }
+      })
+      .catch(() => {})
 
-    const cachedIntentRules = getCached<{ rules: IntentRule[] }>('rules_intent')
-    if (cachedIntentRules) {
-      setIntentRules(cachedIntentRules.rules)
-    } else {
-      fetch(`${ORCHESTRATOR_URL}/v1/rules/intent`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.rules && data.rules.length > 0) {
-            const rules = data.rules.map((r: any) => ({ ...r, enabled: r.enabled === 1 }))
-            setIntentRules(rules)
-            setCached('rules_intent', { rules })
-          }
-        })
-        .catch(() => {})
-    }
+    // Load intent rules from worker
+    fetch(`${ORCHESTRATOR_URL}/v1/rules/intent`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.rules && data.rules.length > 0) {
+          setIntentRules(data.rules.map((r: any) => ({
+            ...r,
+            enabled: r.enabled === 1
+          })))
+        }
+      })
+      .catch(() => {})
 
-    const cachedAccessRules = getCached<{ rules: AccessRule[] }>('rules_access')
-    if (cachedAccessRules) {
-      setAccessRules(cachedAccessRules.rules)
-    } else {
-      fetch(`${ORCHESTRATOR_URL}/v1/rules/access`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.rules && data.rules.length > 0) {
-            const rules = data.rules.map((r: any) => ({ ...r, enabled: r.enabled === 1 }))
-            setAccessRules(rules)
-            setCached('rules_access', { rules })
-          }
-        })
-        .catch(() => {})
-    }
+    // Load access rules from worker
+    fetch(`${ORCHESTRATOR_URL}/v1/rules/access`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.rules && data.rules.length > 0) {
+          setAccessRules(data.rules.map((r: any) => ({
+            ...r,
+            enabled: r.enabled === 1
+          })))
+        }
+      })
+      .catch(() => {})
 
     fetchModels()
   }, [])
@@ -248,7 +207,6 @@ export default function Settings() {
       })
       const data = await res.json()
       if (data.success) {
-        clearCache('rules_intent') // Clear cache after save
         return true
       }
     } catch (e) {}
@@ -264,7 +222,6 @@ export default function Settings() {
       })
       const data = await res.json()
       if (data.success) {
-        clearCache('rules_access') // Clear cache after save
         return true
       }
     } catch (e) {}
@@ -337,7 +294,6 @@ export default function Settings() {
       })
       const data = await res.json()
       if (data.success) {
-        clearCache('config_model') // Clear cache after save
         alert('Model saved successfully!')
       } else {
         alert('Error saving model: ' + (data.error || 'Unknown'))
@@ -358,7 +314,6 @@ export default function Settings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ config: updated })
       })
-      clearCache('config_neuro') // Clear cache after save
     } catch (e) {}
   }
 
