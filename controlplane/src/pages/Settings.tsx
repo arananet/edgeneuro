@@ -127,6 +127,68 @@ export default function Settings() {
     }
   }, [])
 
+  // Load rules from worker on mount
+  useEffect(() => {
+    // Load intent rules from worker
+    fetch(`${ORCHESTRATOR_URL}/v1/rules/intent`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.rules && data.rules.length > 0) {
+          setIntentRules(data.rules.map((r: any) => ({
+            ...r,
+            enabled: r.enabled === 1
+          })))
+        }
+      })
+      .catch(() => {})
+
+    // Load access rules from worker
+    fetch(`${ORCHESTRATOR_URL}/v1/rules/access`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.rules && data.rules.length > 0) {
+          setAccessRules(data.rules.map((r: any) => ({
+            ...r,
+            enabled: r.enabled === 1
+          })))
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  // Save rules to worker
+  const saveIntentRulesToWorker = async () => {
+    try {
+      const res = await fetch(`${ORCHESTRATOR_URL}/v1/rules/intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rules: intentRules })
+      })
+      const data = await res.json()
+      if (data.success) {
+        localStorage.setItem('intent_rules', JSON.stringify(intentRules))
+        return true
+      }
+    } catch (e) {}
+    return false
+  }
+
+  const saveAccessRulesToWorker = async () => {
+    try {
+      const res = await fetch(`${ORCHESTRATOR_URL}/v1/rules/access`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rules: accessRules })
+      })
+      const data = await res.json()
+      if (data.success) {
+        localStorage.setItem('access_rules', JSON.stringify(accessRules))
+        return true
+      }
+    } catch (e) {}
+    return false
+  }
+
   // Fetch models from worker (which calls Cloudflare server-side)
   const fetchModels = async () => {
     setCfLoading(true)
@@ -211,51 +273,57 @@ export default function Settings() {
 
   // Cloudflare Handlers
   // Intent Rules Handlers
-  const saveIntentRule = (rule: IntentRule) => {
+  const saveIntentRule = async (rule: IntentRule) => {
     const updated = editingRule?.data 
       ? intentRules.map(r => r.id === rule.id ? rule : r)
       : [...intentRules, { ...rule, id: Date.now().toString() }]
     setIntentRules(updated)
-    localStorage.setItem('intent_rules', JSON.stringify(updated))
+    // Save to worker
+    await saveIntentRulesToWorker()
     setShowRuleForm(false)
     setEditingRule(null)
   }
 
-  const deleteIntentRule = (id: string) => {
+  const deleteIntentRule = async (id: string) => {
     if (!confirm('Delete this rule?')) return
     const updated = intentRules.filter(r => r.id !== id)
     setIntentRules(updated)
-    localStorage.setItem('intent_rules', JSON.stringify(updated))
+    // Save to worker
+    await saveIntentRulesToWorker()
   }
 
-  const toggleIntentRule = (id: string) => {
+  const toggleIntentRule = async (id: string) => {
     const updated = intentRules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r)
     setIntentRules(updated)
-    localStorage.setItem('intent_rules', JSON.stringify(updated))
+    // Save to worker
+    await saveIntentRulesToWorker()
   }
 
   // Access Rules Handlers
-  const saveAccessRule = (rule: AccessRule) => {
+  const saveAccessRule = async (rule: AccessRule) => {
     const updated = editingRule?.data 
       ? accessRules.map(r => r.id === rule.id ? rule : r)
       : [...accessRules, { ...rule, id: Date.now().toString() }]
     setAccessRules(updated)
-    localStorage.setItem('access_rules', JSON.stringify(updated))
+    // Save to worker
+    await saveAccessRulesToWorker()
     setShowRuleForm(false)
     setEditingRule(null)
   }
 
-  const deleteAccessRule = (id: string) => {
+  const deleteAccessRule = async (id: string) => {
     if (!confirm('Delete this rule?')) return
     const updated = accessRules.filter(r => r.id !== id)
     setAccessRules(updated)
-    localStorage.setItem('access_rules', JSON.stringify(updated))
+    // Save to worker
+    await saveAccessRulesToWorker()
   }
 
-  const toggleAccessRule = (id: string) => {
+  const toggleAccessRule = async (id: string) => {
     const updated = accessRules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r)
     setAccessRules(updated)
-    localStorage.setItem('access_rules', JSON.stringify(updated))
+    // Save to worker
+    await saveAccessRulesToWorker()
   }
 
   return (

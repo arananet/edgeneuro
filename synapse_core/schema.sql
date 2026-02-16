@@ -170,3 +170,23 @@ CREATE TABLE IF NOT EXISTS system_config (
   value TEXT NOT NULL,
   updated_at TEXT DEFAULT (datetime('now'))
 );
+
+-- Intent Classification Rules (maps patterns to agents)
+CREATE TABLE IF NOT EXISTS intent_rules (
+  id TEXT PRIMARY KEY,
+  pattern TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  priority INTEGER DEFAULT 1,
+  enabled INTEGER DEFAULT 1,
+  created_at INTEGER DEFAULT (strftime('%s', 'now'))
+);
+
+-- Access Control Rules (role -> topic -> access level)
+CREATE TABLE IF NOT EXISTS access_rules (
+  id TEXT PRIMARY KEY,
+  role TEXT NOT NULL,
+  topic TEXT NOT NULL,
+  access_level TEXT DEFAULT 'READ',
+  enabled INTEGER DEFAULT 1,
+  created_at INTEGER DEFAULT (strftime('%s', 'now'))
+);

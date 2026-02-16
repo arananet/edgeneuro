@@ -150,6 +150,74 @@ export default {
       }
     }
 
+    // --- GET INTENT RULES ---
+    if (request.method === 'GET' && url.pathname === '/v1/rules/intent') {
+      try {
+        const results = await env.DB.prepare(`
+          SELECT * FROM intent_rules ORDER BY priority ASC
+        `).all();
+        return Response.json({ rules: results.results }, { headers: CORS_HEADERS });
+      } catch (e: any) {
+        return Response.json({ rules: [], error: e.message }, { headers: CORS_HEADERS });
+      }
+    }
+
+    // --- SAVE INTENT RULES ---
+    if (request.method === 'POST' && url.pathname === '/v1/rules/intent') {
+      try {
+        const body = await request.json();
+        const rules = body.rules || [];
+        
+        // Clear existing and insert new
+        await env.DB.prepare(`DELETE FROM intent_rules`).run();
+        
+        for (const rule of rules) {
+          await env.DB.prepare(`
+            INSERT INTO intent_rules (id, pattern, agent_id, priority, enabled)
+            VALUES (?, ?, ?, ?, ?)
+          `).bind(rule.id, rule.pattern, rule.agent_id, rule.priority, rule.enabled ? 1 : 0).run();
+        }
+        
+        return Response.json({ success: true }, { headers: CORS_HEADERS });
+      } catch (e: any) {
+        return Response.json({ error: e.message }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    // --- GET ACCESS RULES ---
+    if (request.method === 'GET' && url.pathname === '/v1/rules/access') {
+      try {
+        const results = await env.DB.prepare(`
+          SELECT * FROM access_rules WHERE enabled = 1
+        `).all();
+        return Response.json({ rules: results.results }, { headers: CORS_HEADERS });
+      } catch (e: any) {
+        return Response.json({ rules: [], error: e.message }, { headers: CORS_HEADERS });
+      }
+    }
+
+    // --- SAVE ACCESS RULES ---
+    if (request.method === 'POST' && url.pathname === '/v1/rules/access') {
+      try {
+        const body = await request.json();
+        const rules = body.rules || [];
+        
+        // Clear existing and insert new
+        await env.DB.prepare(`DELETE FROM access_rules`).run();
+        
+        for (const rule of rules) {
+          await env.DB.prepare(`
+            INSERT INTO access_rules (id, role, topic, access_level, enabled)
+            VALUES (?, ?, ?, ?, ?)
+          `).bind(rule.id, rule.role, rule.topic, rule.access_level, rule.enabled ? 1 : 0).run();
+        }
+        
+        return Response.json({ success: true }, { headers: CORS_HEADERS });
+      } catch (e: any) {
+        return Response.json({ error: e.message }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
     // --- LIST AGENTS ---
     if (request.method === 'GET' && url.pathname === '/v1/agents') {
       const agents = await getAllAgents(env.DB);
@@ -185,15 +253,36 @@ export default {
           decision.reason = `LLM error: ${e.message}`;
         }
       } else {
+        // Keyword-based routing (fallback when no AI)
         const q = query.toLowerCase();
-        for (const agent of agents) {
-          const triggers = agent.intent_triggers || [];
-          for (const trigger of triggers) {
-            if (q.includes(trigger.toLowerCase())) {
-              decision.target = agent.id;
+        
+        // First try DB-based intent rules
+        try {
+          const rulesResult = await env.DB.prepare(`
+            SELECT * FROM intent_rules WHERE enabled = 1 ORDER BY priority ASC
+          `).all();
+          
+          const rules = rulesResult.results as any[];
+          for (const rule of rules) {
+            const pattern = new RegExp(rule.pattern, 'i');
+            if (pattern.test(query)) {
+              decision.target = rule.agent_id;
               decision.confidence = 0.9;
-              decision.reason = `Keyword match: ${trigger}`;
+              decision.reason = `Intent rule match: ${rule.pattern}`;
               break;
+            }
+          }
+        } catch (e: any) {
+          // Fallback to agent triggers if DB query fails
+          for (const agent of agents) {
+            const triggers = agent.intent_triggers || [];
+            for (const trigger of triggers) {
+              if (q.includes(trigger.toLowerCase())) {
+                decision.target = agent.id;
+                decision.confidence = 0.9;
+                decision.reason = `Keyword match: ${trigger}`;
+                break;
+              }
             }
           }
         }
