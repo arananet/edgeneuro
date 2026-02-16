@@ -301,9 +301,15 @@ export default function Settings() {
                 value={selectedModel}
                 onChange={e => handleModelSelect(e.target.value)}
               >
-                {AVAILABLE_MODELS.map(m => (
-                  <option key={m.id} value={m.id}>{m.name} - {m.description}</option>
-                ))}
+                {cfModels.length > 0 ? (
+                  cfModels.map(m => (
+                    <option key={m.id} value={m.id}>{m.id}</option>
+                  ))
+                ) : (
+                  AVAILABLE_MODELS.map(m => (
+                    <option key={m.id} value={m.id}>{m.name} - {m.description}</option>
+                  ))
+                )}
               </select>
             </div>
 
@@ -311,8 +317,8 @@ export default function Settings() {
               <h4 style={{ margin: '0 0 10px', fontSize: '14px' }}>Current Configuration</h4>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '13px' }}>
                 <div>
-                  <span style={{ color: '#666' }}>Base Model:</span>
-                  <code style={{ marginLeft: '8px' }}>@cf/meta/{selectedModel}-instruct</code>
+                  <span style={{ color: '#666' }}>Model:</span>
+                  <code style={{ marginLeft: '8px' }}>{selectedModel || 'Not selected'}</code>
                 </div>
               </div>
             </div>
