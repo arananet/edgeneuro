@@ -28,13 +28,52 @@
 5. User ↔ Agent (direct connection)
 ```
 
-### Neuro-Symbolic Approach 🧠⚙️
+### Neuro-Symbolic Approach
 
 Combines the "intuition" of Language Models with the "logic" of a Knowledge Graph:
 
 - **Symbolic**: Knowledge Graph taxonomy for intent (explicit, auditable)
 - **Neural**: LLM validates intent only when confidence is low
 - **Result**: Secure, precise, explainable routing
+
+---
+
+## The 3 Capital Sins of Traditional Orchestration
+
+EdgeNeuro solves the three critical failures of traditional agent orchestration:
+
+### 1. Latency
+
+Traditional orchestrators act as persistent proxies that must:
+- Process every message through the orchestration layer
+- Maintain conversation state for each user
+- Route messages sequentially through middleware
+
+**EdgeNeuro Solution**: Routing happens in **<50ms** at the edge, closest to the user. The router performs intent classification and immediately hands off, then exits. No state to maintain, no queuing.
+
+### 2. Security (Hallucinations)
+
+Most orchestrators blindly trust the LLM to make routing decisions. This creates:
+- Prompt injection attacks that can redirect traffic
+- Hallucinated permissions that grant unauthorized access
+- No audit trail for access decisions
+
+**EdgeNeuro Solution**: **Neuro-Symbolic Architecture**. The Knowledge Graph is the source of truth - if no explicit path exists in the graph, access is physically blocked. LLM is only used for optional disambiguation, never for access control.
+
+### 3. Bottlenecks
+
+Centralized orchestrators create:
+- Single points of failure
+- Resource exhaustion under load
+- Latency that scales with user count
+
+**EdgeNeuro Solution**: **Hot Potato Pattern**. The router introduces user to agent and immediately exits. No proxy, no state, no bottleneck. Scale is unlimited because each request is independent.
+
+| Problem | Traditional | EdgeNeuro |
+|---------|-------------|-----------|
+| Latency | Seconds per request | <50ms |
+| Security | LLM trust | Knowledge Graph (Default Deny) |
+| Bottlenecks | Central proxy | Ephemeral (no state) |
 
 ---
 
