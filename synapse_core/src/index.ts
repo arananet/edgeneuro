@@ -13,7 +13,9 @@ export interface Env {
   AGENT_KV: KVNamespace;
   DB: D1Database;
   AGENT_SECRET: string;
-  ROUTING_MODEL?: string; // Configure via wrangler.toml: routing_model = "@cf/meta/llama-3.2-1b-instruct"
+  ROUTING_MODEL?: string;
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  CLOUDFLARE_API_TOKEN?: string;
 }
 
 export { SynapseState };
@@ -45,6 +47,50 @@ export default {
       }, { headers: CORS_HEADERS });
     }
 
+    // --- LIST AVAILABLE MODELS ---
+    if (request.method === 'GET' && url.pathname === '/v1/models') {
+      if (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_API_TOKEN) {
+        return Response.json({ 
+          error: 'Cloudflare credentials not configured',
+          models: [
+            { id: '@cf/meta/llama-3.2-1b-instruct', task: 'text-generation' },
+            { id: '@cf/meta/llama-3.2-3b-instruct', task: 'text-generation' },
+            { id: '@cf/meta/llama-3.1-8b-instruct', task: 'text-generation' },
+            { id: '@cf/google/gemma-2-27b-instruct', task: 'text-generation' },
+          ]
+        }, { headers: CORS_HEADERS });
+      }
+
+      try {
+        const response = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/ai/models/search?per_page=50`,
+          {
+            headers: {
+              'Authorization': `Bearer ${env.CLOUDFLARE_API_TOKEN}`
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.success && data.result) {
+          const textModels = data.result.filter((m: any) => 
+            m.task === 'text-generation' || m.task === 'chat' || 
+            m.id.includes('llama') || m.id.includes('gemma') || m.id.includes('mistral')
+          );
+          return Response.json({ models: textModels }, { headers: CORS_HEADERS });
+        } else {
+          throw new Error(data.errors?.[0]?.message || 'Failed to fetch models');
+        }
+      } catch (e: any) {
+        return Response.json({ error: e.message }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
     // --- LIST AGENTS ---
     if (request.method === 'GET' && url.pathname === '/v1/agents') {
       const agents = await getAllAgents(env.DB);
@@ -60,7 +106,7 @@ export default {
       
       if (env.AI && agents.length > 0) {
         try {
-          const response = await env.AI.run('env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL', {
+          const response = await env.AI.run(env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL, {
             messages: [
               { role: 'system', content: buildSystemPrompt(agents) },
               { role: 'user', content: `Route this query: "${query}"` },
@@ -471,7 +517,7 @@ export default {
       let neuralValidation = null;
       if (env.AI && detected.confidence < 0.9) {
         try {
-          const response = await env.AI.run('env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL', {
+          const response = await env.AI.run(env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL, {
             messages: [
               { 
                 role: 'system', 
@@ -604,7 +650,7 @@ export default {
       
       if (env.AI) {
         try {
-          const response = await env.AI.run('env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL', {
+          const response = await env.AI.run(env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL, {
             messages: [
               { 
                 role: 'system', 
@@ -712,7 +758,7 @@ export default {
     
     if (env.AI && agents.length > 0) {
       try {
-        const response = await env.AI.run('env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL', {
+        const response = await env.AI.run(env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL, {
           messages: [
             { role: 'system', content: buildSystemPrompt(agents) },
             { role: 'user', content: query },
