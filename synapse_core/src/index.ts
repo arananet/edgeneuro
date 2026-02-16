@@ -90,10 +90,12 @@ export default {
         const data = await response.json();
         
         if (data.success && data.result) {
-          const textModels = data.result.filter((m: any) => 
-            m.task === 'text-generation' || m.task === 'chat' || 
-            m.id.includes('llama') || m.id.includes('gemma') || m.id.includes('mistral')
-          );
+          // Filter to text generation models - task is an object with id/name
+          const textModels = data.result.filter((m: any) => {
+            const taskName = m.task?.name?.toLowerCase() || '';
+            return taskName.includes('text') || taskName.includes('chat') || 
+              m.id.includes('llama') || m.id.includes('gemma') || m.id.includes('mistral');
+          });
           return Response.json({ models: textModels }, { headers: CORS_HEADERS });
         } else {
           throw new Error(data.errors?.[0]?.message || 'Failed to fetch models');
