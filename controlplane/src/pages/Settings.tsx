@@ -127,6 +127,41 @@ export default function Settings() {
     }
   }, [])
 
+  // Fetch models from worker (which calls Cloudflare server-side)
+  const fetchModels = async () => {
+    setCfLoading(true)
+    setCfError('')
+
+    try {
+      const res = await fetch(`${ORCHESTRATOR_URL}/v1/models`)
+      const data = await res.json()
+
+      if (data.error) {
+        setCfError(data.error + '. Make sure CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN secrets are set in the worker.')
+        // Show fallback models
+        setCfModels([
+          { id: '@cf/meta/llama-3.2-1b-instruct', task: 'text-generation' },
+          { id: '@cf/meta/llama-3.2-3b-instruct', task: 'text-generation' },
+          { id: '@cf/meta/llama-3.1-8b-instruct', task: 'text-generation' },
+          { id: '@cf/google/gemma-2-27b-instruct', task: 'text-generation' },
+        ])
+      } else if (data.models) {
+        setCfModels(data.models)
+      }
+    } catch (err: any) {
+      setCfError(err.message || 'Failed to fetch models')
+      // Fallback models
+      setCfModels([
+        { id: '@cf/meta/llama-3.2-1b-instruct', task: 'text-generation' },
+        { id: '@cf/meta/llama-3.2-3b-instruct', task: 'text-generation' },
+        { id: '@cf/meta/llama-3.1-8b-instruct', task: 'text-generation' },
+        { id: '@cf/google/gemma-2-27b-instruct', task: 'text-generation' },
+      ])
+    }
+
+    setCfLoading(false)
+  }
+
   // Load current model and fetch available models on mount
   useEffect(() => {
     // Load current model config from worker
@@ -166,41 +201,6 @@ export default function Settings() {
       alert('Error saving model: ' + e.message)
     }
     setSavingModel(false)
-  }
-
-  // Fetch models from worker (which calls Cloudflare server-side)
-  const fetchModels = async () => {
-    setCfLoading(true)
-    setCfError('')
-
-    try {
-      const res = await fetch(`${ORCHESTRATOR_URL}/v1/models`)
-      const data = await res.json()
-
-      if (data.error) {
-        setCfError(data.error + '. Make sure CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN secrets are set in the worker.')
-        // Show fallback models
-        setCfModels([
-          { id: '@cf/meta/llama-3.2-1b-instruct', task: 'text-generation' },
-          { id: '@cf/meta/llama-3.2-3b-instruct', task: 'text-generation' },
-          { id: '@cf/meta/llama-3.1-8b-instruct', task: 'text-generation' },
-          { id: '@cf/google/gemma-2-27b-instruct', task: 'text-generation' },
-        ])
-      } else if (data.models) {
-        setCfModels(data.models)
-      }
-    } catch (err: any) {
-      setCfError(err.message || 'Failed to fetch models')
-      // Fallback models
-      setCfModels([
-        { id: '@cf/meta/llama-3.2-1b-instruct', task: 'text-generation' },
-        { id: '@cf/meta/llama-3.2-3b-instruct', task: 'text-generation' },
-        { id: '@cf/meta/llama-3.1-8b-instruct', task: 'text-generation' },
-        { id: '@cf/google/gemma-2-27b-instruct', task: 'text-generation' },
-      ])
-    }
-
-    setCfLoading(false)
   }
 
   const handleNeuroConfigChange = (key: keyof NeuroSymbolicConfig, value: any) => {
