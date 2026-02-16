@@ -163,3 +163,10 @@ CREATE TABLE IF NOT EXISTS access_logs (
 CREATE INDEX IF NOT EXISTS idx_access_logs_user ON access_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_access_logs_topic ON access_logs(requested_topic);
 CREATE INDEX IF NOT EXISTS idx_access_logs_audit ON access_logs(audit_id);
+
+-- System Configuration
+CREATE TABLE IF NOT EXISTS system_config (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT DEFAULT (datetime('now'))
+);

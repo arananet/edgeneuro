@@ -28,6 +28,18 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Agent-Secret, MCP-Protocol-Version, Accept',
 };
 
+// Helper to get routing model from DB or fallback to env/default
+async function getRoutingModel(DB: D1Database): Promise<string> {
+  try {
+    const result = await DB.prepare(`
+      SELECT value FROM system_config WHERE key = 'routing_model'
+    `).first<{ value: string }>();
+    return result?.value || DEFAULT_ROUTING_MODEL;
+  } catch (e) {
+    return DEFAULT_ROUTING_MODEL;
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env) {
     const url = new URL(request.url);
@@ -91,6 +103,44 @@ export default {
       }
     }
 
+    // --- SAVE MODEL CONFIG ---
+    if (request.method === 'POST' && url.pathname === '/v1/config/model') {
+      try {
+        const body = await request.json();
+        const model_id = body.model_id;
+
+        if (!model_id) {
+          return Response.json({ error: 'model_id required' }, { status: 400, headers: CORS_HEADERS });
+        }
+
+        // Upsert config into D1
+        await env.DB.prepare(`
+          INSERT INTO system_config (key, value, updated_at)
+          VALUES ('routing_model', ?, datetime('now'))
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+        `).bind(model_id).run();
+
+        return Response.json({ success: true, model_id }, { headers: CORS_HEADERS });
+      } catch (e: any) {
+        return Response.json({ error: e.message }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    // --- GET MODEL CONFIG ---
+    if (request.method === 'GET' && url.pathname === '/v1/config/model') {
+      try {
+        const result = await env.DB.prepare(`
+          SELECT value FROM system_config WHERE key = 'routing_model'
+        `).first<{ value: string }>();
+
+        return Response.json({ 
+          model_id: result?.value || DEFAULT_ROUTING_MODEL 
+        }, { headers: CORS_HEADERS });
+      } catch (e: any) {
+        return Response.json({ model_id: DEFAULT_ROUTING_MODEL }, { headers: CORS_HEADERS });
+      }
+    }
+
     // --- LIST AGENTS ---
     if (request.method === 'GET' && url.pathname === '/v1/agents') {
       const agents = await getAllAgents(env.DB);
@@ -106,7 +156,7 @@ export default {
       
       if (env.AI && agents.length > 0) {
         try {
-          const response = await env.AI.run(env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL, {
+          const response = await env.AI.run(await getRoutingModel(env.DB), {
             messages: [
               { role: 'system', content: buildSystemPrompt(agents) },
               { role: 'user', content: `Route this query: "${query}"` },
@@ -517,7 +567,7 @@ export default {
       let neuralValidation = null;
       if (env.AI && detected.confidence < 0.9) {
         try {
-          const response = await env.AI.run(env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL, {
+          const response = await env.AI.run(await getRoutingModel(env.DB), {
             messages: [
               { 
                 role: 'system', 
@@ -573,7 +623,7 @@ export default {
           },
           step2_neural: {
             component: 'LLM Validation (optional)',
-            model: env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL,
+            model: await getRoutingModel(env.DB),
             output: neuralValidation || 'skipped (high confidence)'
           },
           step3_simple_access: {
@@ -650,7 +700,7 @@ export default {
       
       if (env.AI) {
         try {
-          const response = await env.AI.run(env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL, {
+          const response = await env.AI.run(await getRoutingModel(env.DB), {
             messages: [
               { 
                 role: 'system', 
@@ -707,7 +757,7 @@ export default {
         architecture: {
           neural: {
             component: 'LLM Intent Detection',
-            model: env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL,
+            model: await getRoutingModel(env.DB),
             output: intent
           },
           symbolic: {
@@ -758,7 +808,7 @@ export default {
     
     if (env.AI && agents.length > 0) {
       try {
-        const response = await env.AI.run(env.ROUTING_MODEL || DEFAULT_ROUTING_MODEL, {
+        const response = await env.AI.run(await getRoutingModel(env.DB), {
           messages: [
             { role: 'system', content: buildSystemPrompt(agents) },
             { role: 'user', content: query },

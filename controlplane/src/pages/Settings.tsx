@@ -45,10 +45,26 @@ const ROLES = ['EMPLOYEE', 'MANAGER', 'HR', 'IT', 'FINANCE', 'ADMIN']
 const ORCHESTRATOR_URL = 'https://edgeneuro-synapse-core.info-693.workers.dev'
 const AGENT_SECRET = 'potato123'
 
+// Cloudflare API types
+interface CloudflareModel {
+  id: string
+  name: string
+  task?: string
+  source?: string
+}
+
 export default function Settings() {
   const [activeTab, setActiveTab] = useState<'models' | 'neurosymbolic' | 'rules'>('models')
   const [models, setModels] = useState<ModelConfig[]>([])
   const [selectedModel, setSelectedModel] = useState('')
+
+  // Cloudflare Config
+  const [cfAccountId, setCfAccountId] = useState('')
+  const [cfApiToken, setCfApiToken] = useState('')
+  const [cfModels, setCfModels] = useState<CloudflareModel[]>([])
+  const [cfLoading, setCfLoading] = useState(false)
+  const [cfError, setCfError] = useState('')
+  const [savingModel, setSavingModel] = useState(false)
 
   // Neuro Symbolic Config
   const [neuroConfig, setNeuroConfig] = useState<NeuroSymbolicConfig>({
@@ -113,12 +129,97 @@ export default function Settings() {
     }
   }, [])
 
+  // Load Cloudflare config and current model on mount
+  useEffect(() => {
+    const savedCfConfig = localStorage.getItem('cloudflare_config')
+    if (savedCfConfig) {
+      const config = JSON.parse(savedCfConfig)
+      setCfAccountId(config.account_id || '')
+      setCfApiToken(config.api_token || '')
+    }
+
+    // Load current model config from worker
+    fetch(`${ORCHESTRATOR_URL}/v1/config/model`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.model_id) {
+          setSelectedModel(data.model_id)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   const handleModelSelect = (modelId: string) => {
     setSelectedModel(modelId)
-    localStorage.setItem('model_config', JSON.stringify({
-      models,
-      active: modelId
+  }
+
+  const saveSelectedModel = async () => {
+    if (!selectedModel) return
+    setSavingModel(true)
+    try {
+      const res = await fetch(`${ORCHESTRATOR_URL}/v1/config/model`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model_id: selectedModel })
+      })
+      const data = await res.json()
+      if (data.success) {
+        alert('Model saved successfully!')
+      } else {
+        alert('Error saving model: ' + (data.error || 'Unknown'))
+      }
+    } catch (e: any) {
+      alert('Error saving model: ' + e.message)
+    }
+    setSavingModel(false)
+  }
+
+  // Cloudflare Handlers
+  const saveCloudflareConfig = () => {
+    localStorage.setItem('cloudflare_config', JSON.stringify({
+      account_id: cfAccountId,
+      api_token: cfApiToken
     }))
+    setCfError('')
+  }
+
+  const fetchCloudflareModels = async () => {
+    if (!cfAccountId || !cfApiToken) {
+      setCfError('Please enter Account ID and API Token')
+      return
+    }
+
+    setCfLoading(true)
+    setCfError('')
+
+    try {
+      const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/ai/models/search?per_page=50`, {
+        headers: {
+          'Authorization': `Bearer ${cfApiToken}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      if (data.success && data.result) {
+        const textModels = data.result.filter((m: any) => 
+          m.task === 'text-generation' || m.task === 'chat' || 
+          m.id.includes('llama') || m.id.includes('gemma') || m.id.includes('mistral')
+        )
+        setCfModels(textModels)
+      } else {
+        throw new Error(data.errors?.[0]?.message || 'Failed to fetch models')
+      }
+    } catch (err: any) {
+      setCfError(err.message || 'Failed to fetch models')
+      setCfModels([])
+    }
+
+    setCfLoading(false)
   }
 
   const handleNeuroConfigChange = (key: keyof NeuroSymbolicConfig, value: any) => {
@@ -241,19 +342,76 @@ export default function Settings() {
               <h3 className="card-title">Available Models</h3>
             </div>
 
+            {/* Cloudflare Credentials */}
+            <div style={{ marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '6px' }}>
+              <h4 style={{ margin: '0 0 10px', fontSize: '14px' }}>☁️ Cloudflare API (Optional)</h4>
+              <p style={{ marginBottom: '15px', fontSize: '12px', color: '#666' }}>
+                Enter your Cloudflare credentials to fetch available models. Credentials are stored locally and never sent to our servers.
+              </p>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Account ID</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={cfAccountId}
+                    onChange={e => setCfAccountId(e.target.value)}
+                    placeholder="023e105f4ecef8ad9ca31a8372d0c353"
+                    style={{ fontSize: '12px' }}
+                  />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">API Token</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    value={cfApiToken}
+                    onChange={e => setCfApiToken(e.target.value)}
+                    placeholder="Bearer token"
+                    style={{ fontSize: '12px' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button className="btn btn-secondary" onClick={saveCloudflareConfig} style={{ padding: '4px 12px', fontSize: '12px' }}>
+                  Save Credentials
+                </button>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={fetchCloudflareModels}
+                  disabled={cfLoading || !cfAccountId || !cfApiToken}
+                  style={{ padding: '4px 12px', fontSize: '12px' }}
+                >
+                  {cfLoading ? 'Fetching...' : 'Fetch Models'}
+                </button>
+              </div>
+
+              {cfError && (
+                <p style={{ margin: '10px 0 0', color: '#dc3545', fontSize: '12px' }}>{cfError}</p>
+              )}
+            </div>
+
+            {/* Model List */}
             <table className="table">
               <thead>
                 <tr>
-                  <th>Model</th>
-                  <th>Description</th>
+                  <th>Model ID</th>
+                  <th>Task</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {AVAILABLE_MODELS.map(m => (
+                {(cfModels.length > 0 ? cfModels : [
+                  { id: '@cf/meta/llama-3.2-1b-instruct', task: 'text-generation' },
+                  { id: '@cf/meta/llama-3.2-3b-instruct', task: 'text-generation' },
+                  { id: '@cf/meta/llama-3.1-8b-instruct', task: 'text-generation' },
+                  { id: '@cf/google/gemma-2-27b-instruct', task: 'text-generation' },
+                ]).map(m => (
                   <tr key={m.id}>
-                    <td><strong>{m.name}</strong></td>
-                    <td>{m.description}</td>
+                    <td><code>{m.id}</code></td>
+                    <td>{m.task || '-'}</td>
                     <td>
                       {selectedModel === m.id ? (
                         <span className="badge badge-success">Active</span>
@@ -271,6 +429,22 @@ export default function Settings() {
                 ))}
               </tbody>
             </table>
+
+            {/* Save Button */}
+            {selectedModel && (
+              <div style={{ marginTop: '15px', padding: '15px', background: '#e7f3ff', borderRadius: '6px', textAlign: 'center' }}>
+                <p style={{ margin: '0 0 10px', fontSize: '13px' }}>
+                  <strong>Selected:</strong> <code>{selectedModel}</code>
+                </p>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={saveSelectedModel}
+                  disabled={savingModel}
+                >
+                  {savingModel ? 'Saving...' : 'Save Configuration'}
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}
