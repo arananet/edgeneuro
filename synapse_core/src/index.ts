@@ -95,13 +95,13 @@ export default {
             .filter((m: any) => {
               const taskName = m.task?.name?.toLowerCase() || '';
               return taskName.includes('text') || taskName.includes('chat') || 
-                m.id.includes('llama') || m.id.includes('gemma') || m.id.includes('mistral');
+                m.name?.includes('llama') || m.name?.includes('gemma') || m.name?.includes('mistral');
             })
             .map((m: any) => ({
-              id: m.id,
+              id: m.name, // Use 'name' as the model ID (e.g., @cf/meta/llama-3.2-1b-instruct)
               name: m.name,
-              task: m.task?.name || m.task?.id || 'text-generation',
-              description: m.description
+              task: m.task?.name || 'text-generation',
+              description: m.description || ''
             }));
           return Response.json({ models: textModels }, { headers: CORS_HEADERS });
         } else {
