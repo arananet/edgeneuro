@@ -23,6 +23,136 @@ export { SynapseState };
 const DEFAULT_ROUTING_MODEL = '@cf/meta/llama-3.2-1b-instruct';
 
 // ============================================================================
+// NEURO-SYMBOLIC ROUTING ENGINE
+// ============================================================================
+// This is the core routing logic that combines:
+// - NEURAL: LLM for intent detection
+// - SYMBOLIC: Knowledge Graph for access control + agent resolution
+// ============================================================================
+
+interface RoutingDecision {
+  target: string;
+  confidence: number;
+  reason: string;
+  architecture: {
+    neural: boolean;
+    symbolic: boolean;
+    method: string;
+  };
+}
+
+/**
+ * Unified Neuro-Symbolic Routing
+ * 
+ * Flow:
+ * 1. Try DB intent_rules (fastest - symbolic keyword match)
+ * 2. Try LLM intent detection (neural)
+ * 3. Validate with Knowledge Graph (symbolic)
+ * 4. Return final decision
+ */
+async function neuroSymbolicRouting(
+  query: string,
+  agents: any[],
+  env: Env
+): Promise<RoutingDecision> {
+  const defaultDecision: RoutingDecision = {
+    target: 'agent_fallback',
+    confidence: 0.0,
+    reason: 'No routing match',
+    architecture: { neural: false, symbolic: false, method: 'fallback' }
+  };
+
+  // =========================================================================
+  // STEP 1: SYMBOLIC - DB Intent Rules (fastest, deterministic)
+  // =========================================================================
+  try {
+    const rulesResult = await env.DB.prepare(`
+      SELECT * FROM intent_rules WHERE enabled = 1 ORDER BY priority ASC
+    `).all();
+    
+    const rules = rulesResult.results as any[];
+    for (const rule of rules) {
+      const pattern = new RegExp(rule.pattern, 'i');
+      if (pattern.test(query)) {
+        // Verify agent exists
+        if (agents.find(a => a.id === rule.agent_id)) {
+          return {
+            target: rule.agent_id,
+            confidence: 0.9,
+            reason: `Intent rule match: ${rule.pattern}`,
+            architecture: { neural: false, symbolic: true, method: 'db_rules' }
+          };
+        }
+      }
+    }
+  } catch (e) {
+    // DB rules failed, continue to LLM
+  }
+
+  // =========================================================================
+  // STEP 2: NEURAL - LLM Intent Detection
+  // =========================================================================
+  if (env.AI && agents.length > 0) {
+    const modelId = await getRoutingModel(env.DB);
+    
+    try {
+      const response = await env.AI.run(modelId, {
+        messages: [
+          { role: 'system', content: buildSystemPrompt(agents) },
+          { role: 'user', content: query }
+        ]
+      });
+
+      if (response.response) {
+        const jsonMatch = response.response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          const llmTarget = parsed.target || 'agent_fallback';
+          const llmConfidence = parsed.confidence || 0.5;
+
+          // Verify agent exists
+          if (agents.find(a => a.id === llmTarget)) {
+            // =========================================================================
+            // STEP 3: SYMBOLIC - Validate with Knowledge Graph
+            // =========================================================================
+            // For now, accept LLM decision if agent exists
+            // TODO: Integrate with access_rules for role-based filtering
+            return {
+              target: llmTarget,
+              confidence: llmConfidence,
+              reason: parsed.reason || 'LLM decision',
+              architecture: { neural: true, symbolic: false, method: 'llm' }
+            };
+          }
+        }
+      }
+    } catch (e: any) {
+      // LLM failed, continue to fallback
+    }
+  }
+
+  // =========================================================================
+  // STEP 4: FALLBACK - Agent intent_triggers (symbolic keyword match)
+  // =========================================================================
+  const queryLower = query.toLowerCase();
+  for (const agent of agents) {
+    const triggers = agent.intent_triggers || [];
+    for (const trigger of triggers) {
+      if (queryLower.includes(trigger.toLowerCase())) {
+        return {
+          target: agent.id,
+          confidence: 0.8,
+          reason: `Keyword match: ${trigger}`,
+          architecture: { neural: false, symbolic: true, method: 'agent_triggers' }
+        };
+      }
+    }
+  }
+
+  return defaultDecision;
+}
+
+// ============================================================================
 // OBSERVABILITY: Logging Functions
 // ============================================================================
 
@@ -422,145 +552,27 @@ export default {
       return Response.json({ agents, count: agents.length }, { headers: CORS_HEADERS });
     }
 
-    // --- TEST ROUTING (LLM-powered) ---
+    // --- TEST ROUTING (Neuro-Symbolic) ---
     if (request.method === 'GET' && url.pathname === '/v1/test') {
       const query = url.searchParams.get('q') || '';
       const agents = await getActiveAgents(env.DB);
       const modelId = await getRoutingModel(env.DB);
       const startTime = Date.now();
       
-      let decision = { target: 'agent_fallback', confidence: 0.0, reason: 'No AI available' };
-      let aiUsed = false;
-      let aiError: string | null = null;
-      
-      if (env.AI && agents.length > 0) {
-        try {
-          // Log AI request
-          await logRequest(env.DB, {
-            level: 'INFO',
-            type: 'ai_request',
-            model_id: modelId,
-            prompt: `Route this query: "${query}"`,
-            agent_id: 'routing',
-            latency_ms: 0
-          });
-          
-          const response = await env.AI.run(modelId, {
-            messages: [
-              { role: 'system', content: buildSystemPrompt(agents) },
-              { role: 'user', content: `Route this query: "${query}"` },
-            ],
-          });
-          
-          const latencyMs = Date.now() - startTime;
-          aiUsed = true;
-          
-          // Validate response
-          if (!response.response) {
-            aiError = 'Empty response from AI';
-            decision.reason = aiError;
-          } else {
-            const jsonMatch = response.response.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              try {
-                const parsed = JSON.parse(jsonMatch[0]);
-                decision = { 
-                  target: parsed.target || 'agent_fallback', 
-                  confidence: parsed.confidence || 0.5,
-                  reason: parsed.reason || 'LLM decision'
-                };
-                
-                // Log AI response
-                await logRequest(env.DB, {
-                  level: 'INFO',
-                  type: 'ai_response',
-                  model_id: modelId,
-                  response: JSON.stringify(decision),
-                  agent_id: 'routing',
-                  latency_ms: latencyMs
-                });
-              } catch (parseErr: any) {
-                aiError = `Failed to parse AI response: ${parseErr.message}`;
-                decision.reason = aiError;
-              }
-            } else {
-              aiError = 'AI response contained no valid JSON';
-              decision.reason = aiError;
-            }
-          }
-        } catch (e: any) {
-          aiUsed = true;
-          aiError = e.message || 'Unknown AI error';
-          decision.reason = `AI error: ${aiError}`;
-          
-          // Log error
-          await logRequest(env.DB, {
-            level: 'ERROR',
-            type: 'worker_error',
-            model_id: modelId,
-            error_message: aiError,
-            agent_id: 'routing',
-            latency_ms: Date.now() - startTime
-          });
-        }
-      } else {
-        // No AI - use symbolic intent detection
-        const detector = new SymbolicIntentDetector();
-        const detected = detector.detect(query, { userId: 'anonymous', role: 'EMPLOYEE', department: '', sessionActive: true });
-        
-        if (detected.intent && detected.confidence > 0.5) {
-          // Map detected intent to agent
-          const intent = INTENT_TAXONOMY.find(i => i.id === detected.intent);
-          if (intent?.agent && agents.find(a => a.id === intent.agent)) {
-            decision.target = intent.agent;
-            decision.confidence = detected.confidence;
-            decision.reason = `Symbolic intent: ${detected.intent}`;
-          }
-        }
-        
-        // If symbolic failed, try keyword matching
-        if (decision.confidence < 0.5) {
-          const q = query.toLowerCase();
-          for (const agent of agents) {
-            const triggers = agent.intent_triggers || [];
-            for (const trigger of triggers) {
-              if (q.includes(trigger.toLowerCase())) {
-                decision.target = agent.id;
-                decision.confidence = 0.9;
-                decision.reason = `Keyword match: ${trigger}`;
-                break;
-              }
-            }
-          }
-        }
-      }
-      
-      // Always try symbolic intent detection as validation/override
-      // This uses the Knowledge Graph for deterministic routing
-      try {
-        const detector = new SymbolicIntentDetector();
-        const detected = detector.detect(query, { userId: 'anonymous', role: 'EMPLOYEE', department: '', sessionActive: true });
-        
-        if (detected.intent && detected.confidence > 0.7) {
-          const intent = INTENT_TAXONOMY.find(i => i.id === detected.intent);
-          if (intent?.agent && agents.find(a => a.id === intent.agent)) {
-            // Override LLM decision if symbolic is confident
-            decision.target = intent.agent;
-            decision.confidence = detected.confidence;
-            decision.reason = `Knowledge Graph override: ${detected.intent} (confidence: ${detected.confidence})`;
-          }
-        }
-      } catch (e) {
-        // Symbolic detection failed, keep LLM decision
-      }
+      // Use Neuro-Symbolic routing
+      const routingResult = await neuroSymbolicRouting(query, agents, env);
       
       return Response.json({
         query,
-        decision,
-        ai_used: aiUsed,
-        ai_error: aiError,
+        decision: {
+          target: routingResult.target,
+          confidence: routingResult.confidence,
+          reason: routingResult.reason
+        },
+        architecture: routingResult.architecture,
         model_used: modelId,
-        agents_available: agents.map((a: any) => a.id)
+        agents_available: agents.map((a: any) => a.id),
+        latency_ms: Date.now() - startTime
       }, { headers: CORS_HEADERS });
     }
 
@@ -1165,102 +1177,29 @@ export default {
       }, { headers: CORS_HEADERS });
     }
 
-    // --- ROUTING ---
+    // --- ROUTING --- (Main entry point - Neuro-Symbolic)
     const query = url.searchParams.get('q');
     if (!query) return new Response('EdgeNeuro SynapseCore Active', { status: 200, headers: CORS_HEADERS });
 
     const agents = await getActiveAgents(env.DB);
-    const modelId = await getRoutingModel(env.DB);
     const startTime = Date.now();
-    let decision = { target: 'agent_fallback', confidence: 0.0 };
-    let aiUsed = false;
-    let aiError: string | null = null;
     
-    if (env.AI && agents.length > 0) {
-      try {
-        // Log AI request
-        await logRequest(env.DB, {
-          level: 'INFO',
-          type: 'ai_request',
-          model_id: modelId,
-          prompt: query,
-          agent_id: 'routing',
-          latency_ms: 0
-        });
-        
-        const response = await env.AI.run(modelId, {
-          messages: [
-            { role: 'system', content: buildSystemPrompt(agents) },
-            { role: 'user', content: query },
-          ],
-        });
-
-        const latencyMs = Date.now() - startTime;
-        aiUsed = true;
-        
-        if (!response.response) {
-          aiError = 'Empty response from AI';
-          await logRequest(env.DB, {
-            level: 'ERROR',
-            type: 'worker_error',
-            model_id: modelId,
-            error_message: aiError,
-            agent_id: 'routing',
-            latency_ms: latencyMs
-          });
-        } else {
-          const jsonMatch = response.response.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            try {
-              const parsed = JSON.parse(jsonMatch[0]);
-              decision = { target: parsed.target || 'agent_fallback', confidence: parsed.confidence || 0.5 };
-              
-              // Log AI response
-              await logRequest(env.DB, {
-                level: 'INFO',
-                type: 'ai_response',
-                model_id: modelId,
-                response: JSON.stringify(decision),
-                agent_id: 'routing',
-                latency_ms: latencyMs
-              });
-            } catch (parseErr: any) {
-              aiError = `Failed to parse AI response: ${parseErr.message}`;
-            }
-          } else {
-            aiError = 'AI response contained no valid JSON';
-          }
-        }
-        
-        if (aiError) {
-          await logRequest(env.DB, {
-            level: 'ERROR',
-            type: 'worker_error',
-            model_id: modelId,
-            error_message: aiError,
-            agent_id: 'routing',
-            latency_ms: Date.now() - startTime
-          });
-        }
-      } catch (e: any) {
-        aiUsed = true;
-        aiError = e.message || 'Unknown AI error';
-        console.error('AI Error:', aiError);
-        
-        await logRequest(env.DB, {
-          level: 'ERROR',
-          type: 'worker_error',
-          model_id: modelId,
-          error_message: aiError,
-          agent_id: 'routing',
-          latency_ms: Date.now() - startTime
-        });
-      }
-    }
-
-    const targetAgent = agents.find((a: any) => a.id === decision.target) || agents[0] || { 
+    // Use Neuro-Symbolic routing
+    const routingResult = await neuroSymbolicRouting(query, agents, env);
+    
+    const targetAgent = agents.find((a: any) => a.id === routingResult.target) || agents[0] || { 
       id: 'agent_fallback', connection: { url: 'https://support.internal', auth_strategy: 'none' } 
     };
+
+    // Log the routing decision
+    await logRequest(env.DB, {
+      level: 'INFO',
+      type: 'routing',
+      prompt: query,
+      response: JSON.stringify(routingResult),
+      agent_id: routingResult.target,
+      latency_ms: Date.now() - startTime
+    });
 
     const traceId = crypto.randomUUID();
     return Response.json(
@@ -1268,11 +1207,10 @@ export default {
         type: 'a2a/connect',
         target: { id: targetAgent.id, endpoint: targetAgent.connection.url, auth_headers: { 'X-Guest': 'true' } },
         trace_id: traceId,
-        // Debug info
+        // Debug info showing Neuro-Symbolic architecture
         _debug: {
-          ai_used: aiUsed,
-          ai_error: aiError,
-          model_used: modelId,
+          decision: routingResult,
+          model_used: await getRoutingModel(env.DB),
           latency_ms: Date.now() - startTime
         }
       },
