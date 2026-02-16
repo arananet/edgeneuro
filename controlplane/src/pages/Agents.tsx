@@ -176,6 +176,7 @@ export default function Agents() {
     setShowForm(false)
     setFormData({ id: '', name: '', description: '', url: '', auth_strategy: 'bearer', triggers: '' })
     setTestResult(null)
+    setEditingAgent(null)
     loadAgents()
   }
 
@@ -184,17 +185,20 @@ export default function Agents() {
       <div className="card">
         <div className="card-header">
           <h3 className="card-title">Registered Agents</h3>
-          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+          <button className="btn btn-primary" onClick={() => { setShowForm(!showForm); setEditingAgent(null); setFormData({ id: '', name: '', description: '', url: '', auth_strategy: 'bearer', triggers: '' }); }}>
             {showForm ? 'Cancel' : '+ Add Agent'}
           </button>
         </div>
 
         {showForm && (
           <form onSubmit={handleSubmit} style={{ marginBottom: '20px', padding: '15px', background: 'var(--background)', borderRadius: '6px' }}>
+            <h4 style={{ marginBottom: '15px' }}>
+              {editingAgent ? '✏️ Edit Agent' : '➕ Register New Agent'}
+            </h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               <div className="form-group">
                 <label className="form-label">Agent ID</label>
-                <input className="form-input" value={formData.id} onChange={e => setFormData({...formData, id: e.target.value})} placeholder="agent_hr" required />
+                <input className="form-input" value={formData.id} onChange={e => setFormData({...formData, id: e.target.value})} placeholder="agent_hr" required disabled={!!editingAgent} />
               </div>
               <div className="form-group">
                 <label className="form-label">Name</label>
@@ -253,7 +257,7 @@ export default function Agents() {
             </div>
 
             <button type="submit" className="btn btn-success" style={{ marginTop: '10px' }} disabled={testResult && !testResult.success}>
-              Register Agent
+              {editingAgent ? 'Update Configuration' : 'Register Agent'}
             </button>
           </form>
         )}
