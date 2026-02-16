@@ -1,12 +1,40 @@
-# EdgeNeuro 🧠
+# EdgeNeuro 🧠⚙️🎼
 
-**Enterprise-Grade Serverless Intent Detection Router**
+**Enterprise-Grade Serverless Router & Orchestrator**
 
 ![EdgeNeuro Logo](./docs/assets/logo.svg)
 
 > "The future is per-request ephemeral supervisors that spin up, route, and die. It's efficient." — *EdgeNeuro Philosophy*
 
-EdgeNeuro is a "Hot Potato" architecture orchestrator built on Cloudflare Workers (SynapseCore), Workers AI (Llama-3), and Durable Objects. It acts as an **Edge Router**, classifying user intent in <50ms and handing off connections directly to specialized agents.
+---
+
+## What is EdgeNeuro? 🚦🎼
+
+**EdgeNeuro is both a Router AND an Orchestrator** using a "Hot Potato" pattern:
+
+| As a **Router** 🚦 | As an **Orchestrator** 🎼 |
+|-------------------|------------------------|
+| Classifies user intent in **<50ms** | Coordinates a **mesh of specialized agents** |
+| Dispatches to the correct agent | Connects user to agent and **exits immediately** |
+| Uses **Neuro-Symbolic** intent detection | No bottleneck - zero state |
+
+### The Hot Potato Pattern 🎯
+
+```
+1. User query → EdgeNeuro
+2. Neuro-Symbolic Intent Detection (<50ms)
+3. EdgeNeuro connects user to agent
+4. EdgeNeuro EXITS - no proxy, no bottleneck
+5. User ↔ Agent (direct connection)
+```
+
+### Neuro-Symbolic Approach 🧠⚙️
+
+Combines the "intuition" of Language Models with the "logic" of a Knowledge Graph:
+
+- **Symbolic**: Knowledge Graph taxonomy for intent (explicit, auditable)
+- **Neural**: LLM validates intent only when confidence is low
+- **Result**: Secure, precise, explainable routing
 
 ---
 
@@ -374,12 +402,13 @@ This architecture is based on the latest research in multi-agent orchestration:
 | **Cost** | Pay-per-request | Enterprise license | Enterprise license | Infrastructure |
 
 **Key Differentiators:**
-- **Neuro-Symbolic Architecture:** Combines LLM intent detection with Knowledge Graph-based access control
-- **Default Deny:** Most secure approach - if no explicit permission, access is blocked
+- **Router + Orchestrator:** Acts as both - classifies intent AND coordinates agent mesh
+- **Hot Potato Pattern:** Connects user to agent and exits immediately - no bottleneck
+- **Neuro-Symbolic Intent Detection:** Knowledge Graph taxonomy + optional LLM validation
+- **Default Deny:** Most secure - if no explicit permission, access is blocked
 - **Capability-Based:** Dynamic permissions (e.g., HAS_VALID_TICKET, MANAGER_APPROVED)
-- **Explainable:** Every access decision includes reasoning path from Knowledge Graph
+- **Explainable:** Every decision includes reasoning path from Knowledge Graph
 - **Edge-First:** Runs on Cloudflare's global network, closest to users
-- **Hot Potato Pattern:** Router introduces client to agent and leaves; no proxy bottleneck
 - **Standards-Based:** Built on A2A and MCP for interoperability
 
 ---
