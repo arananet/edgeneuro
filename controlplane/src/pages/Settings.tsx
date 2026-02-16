@@ -1,21 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 
 interface ModelConfig {
   id: string
   name: string
   base_model: string
-  lora_id?: string
   enabled: boolean
   is_default: boolean
-}
-
-interface LoRAAdapter {
-  id: string
-  name: string
-  base_model: string
-  uploaded_at: string
-  size: number
-  status: 'ready' | 'error' | 'loading'
 }
 
 interface NeuroSymbolicConfig {
@@ -38,13 +28,9 @@ const ORCHESTRATOR_URL = 'https://edgeneuro-synapse-core.info-693.workers.dev'
 const AGENT_SECRET = 'potato123'
 
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState<'models' | 'lora' | 'neurosymbolic'>('models')
+  const [activeTab, setActiveTab] = useState<'models' | 'neurosymbolic'>('models')
   const [models, setModels] = useState<ModelConfig[]>([])
   const [selectedModel, setSelectedModel] = useState('')
-  const [loraAdapters, setLoraAdapters] = useState<LoRAAdapter[]>([])
-  const [dragActive, setDragActive] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Neuro Symbolic Config
   const [neuroConfig, setNeuroConfig] = useState<NeuroSymbolicConfig>({
@@ -67,12 +53,6 @@ export default function Settings() {
       setSelectedModel('llama-3.2-1b')
     }
 
-    // Load LoRA adapters
-    const savedLoras = localStorage.getItem('lora_adapters')
-    if (savedLoras) {
-      setLoraAdapters(JSON.parse(savedLoras))
-    }
-
     // Load Neuro Symbolic config
     const savedNeuro = localStorage.getItem('neuro_symbolic_config')
     if (savedNeuro) {
@@ -88,89 +68,10 @@ export default function Settings() {
     }))
   }
 
-  // LoRA Upload Handlers
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true)
-    } else if (e.type === 'dragleave') {
-      setDragActive(false)
-    }
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragActive(false)
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFiles(e.dataTransfer.files)
-    }
-  }
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      handleFiles(e.target.files)
-    }
-  }
-
-  const handleFiles = async (files: FileList) => {
-    setUploading(true)
-    
-    // Simulate upload - in real app would upload to server
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]
-      const newAdapter: LoRAAdapter = {
-        id: `lora_${Date.now()}_${i}`,
-        name: file.name.replace(/\.[^/.]+$/, ''),
-        base_model: 'llama-3.2-1b',
-        uploaded_at: new Date().toISOString(),
-        size: file.size,
-        status: 'loading'
-      }
-
-      setLoraAdapters(prev => {
-        const updated = [...prev, newAdapter]
-        localStorage.setItem('lora_adapters', JSON.stringify(updated))
-        return updated
-      })
-
-      // Simulate processing
-      setTimeout(() => {
-        setLoraAdapters(prev => {
-          const updated = prev.map(a => 
-            a.id === newAdapter.id 
-              ? { ...a, status: 'ready' as const }
-              : a
-          )
-          localStorage.setItem('lora_adapters', JSON.stringify(updated))
-          return updated
-        })
-      }, 1500)
-    }
-    
-    setUploading(false)
-  }
-
-  const handleDeleteLora = (id: string) => {
-    if (!confirm('Delete this LoRA adapter?')) return
-    setLoraAdapters(prev => {
-      const updated = prev.filter(a => a.id !== id)
-      localStorage.setItem('lora_adapters', JSON.stringify(updated))
-      return updated
-    })
-  }
-
   const handleNeuroConfigChange = (key: keyof NeuroSymbolicConfig, value: any) => {
     const updated = { ...neuroConfig, [key]: value }
     setNeuroConfig(updated)
     localStorage.setItem('neuro_symbolic_config', JSON.stringify(updated))
-  }
-
-  const formatBytes = (bytes: number) => {
-    if (bytes < 1024) return bytes + ' B'
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
   }
 
   return (
@@ -182,12 +83,6 @@ export default function Settings() {
           onClick={() => setActiveTab('models')}
         >
           🤖 Models
-        </button>
-        <button
-          className={activeTab === 'lora' ? 'btn btn-primary' : 'btn btn-secondary'}
-          onClick={() => setActiveTab('lora')}
-        >
-          📦 LoRA Adapters
         </button>
         <button
           className={activeTab === 'neurosymbolic' ? 'btn btn-primary' : 'btn btn-secondary'}
@@ -228,10 +123,6 @@ export default function Settings() {
                 <div>
                   <span style={{ color: '#666' }}>Base Model:</span>
                   <code style={{ marginLeft: '8px' }}>@cf/meta/{selectedModel}-instruct</code>
-                </div>
-                <div>
-                  <span style={{ color: '#666' }}>Fine-tuned:</span>
-                  <span style={{ marginLeft: '8px' }}>{models.find(m => m.id === selectedModel)?.lora_id || 'None'}</span>
                 </div>
               </div>
             </div>
@@ -274,109 +165,6 @@ export default function Settings() {
             </table>
           </div>
         </>
-      )}
-
-      {/* LoRA Adapters Tab */}
-      {activeTab === 'lora' && (
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title">Fine-Tuned LoRA Adapters</h3>
-          </div>
-
-          <p style={{ marginBottom: '15px', color: 'var(--text-secondary)' }}>
-            Upload custom LoRA adapters for domain-specific intent classification.
-          </p>
-
-          <div 
-            style={{ 
-              padding: '30px', 
-              border: `2px dashed ${dragActive ? '#0066cc' : '#ddd'}`,
-              borderRadius: '6px', 
-              textAlign: 'center',
-              background: dragActive ? '#f0f7ff' : 'transparent',
-              transition: 'all 0.2s'
-            }}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".safetensors,.json"
-              multiple
-              style={{ display: 'none' }}
-              onChange={handleFileInput}
-            />
-            <p style={{ color: '#666', marginBottom: '10px' }}>
-              {uploading ? 'Uploading...' : 'Drag & drop LoRA adapter files here'}
-            </p>
-            <p style={{ fontSize: '12px', color: '#999', marginBottom: '10px' }}>
-              Supported: .safetensors + adapter_config.json
-            </p>
-            <button 
-              className="btn btn-secondary" 
-              style={{ marginTop: '10px' }}
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-            >
-              Browse Files
-            </button>
-          </div>
-
-          {loraAdapters.length > 0 && (
-            <table className="table" style={{ marginTop: '20px' }}>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Base Model</th>
-                  <th>Size</th>
-                  <th>Uploaded</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loraAdapters.map(adapter => (
-                  <tr key={adapter.id}>
-                    <td><strong>{adapter.name}</strong></td>
-                    <td>{adapter.base_model}</td>
-                    <td>{formatBytes(adapter.size)}</td>
-                    <td>{new Date(adapter.uploaded_at).toLocaleDateString()}</td>
-                    <td>
-                      {adapter.status === 'loading' && <span className="badge" style={{ background: '#fff3cd', color: '#856404' }}>Loading...</span>}
-                      {adapter.status === 'ready' && <span className="badge badge-success">Ready</span>}
-                      {adapter.status === 'error' && <span className="badge badge-success">Error</span>}
-                    </td>
-                    <td>
-                      <button 
-                        className="btn btn-secondary" 
-                        style={{ padding: '2px 8px', fontSize: '11px', marginRight: '5px' }}
-                        onClick={() => alert(`Testing LoRA: ${adapter.name}`)}
-                      >
-                        Test
-                      </button>
-                      <button 
-                        className="btn btn-secondary" 
-                        style={{ padding: '2px 8px', fontSize: '11px', color: '#dc3545' }}
-                        onClick={() => handleDeleteLora(adapter.id)}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
-          {loraAdapters.length === 0 && (
-            <p style={{ marginTop: '20px', textAlign: 'center', color: '#666' }}>
-              No LoRA adapters uploaded yet.
-            </p>
-          )}
-        </div>
       )}
 
       {/* Neuro Symbolic Tab */}
