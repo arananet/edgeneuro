@@ -32,6 +32,9 @@ export default function Agents() {
   })
   const [testResult, setTestResult] = useState<any>(null)
   const [testing, setTesting] = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState<string | null>(null)
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
+  const [deletingAgent, setDeletingAgent] = useState<string | null>(null)
 
   const loadAgents = () => {
     setLoading(true)
@@ -66,6 +69,36 @@ export default function Agents() {
       headers: { 'X-Agent-Secret': AGENT_SECRET }
     })
     loadAgents()
+  }
+
+  const handleDelete = async (agentId: string) => {
+    if (!confirm(`Are you sure you want to delete agent "${agentId}"?`)) return
+    setDeletingAgent(agentId)
+    try {
+      await fetch(`${ORCHESTRATOR_URL}/v1/agent/delete?id=${agentId}`, {
+        method: 'DELETE',
+        headers: { 'X-Agent-Secret': AGENT_SECRET }
+      })
+      loadAgents()
+    } catch (e) {
+      console.error('Failed to delete agent:', e)
+    }
+    setDeletingAgent(null)
+    setDropdownOpen(null)
+  }
+
+  const handleEdit = (agent: Agent) => {
+    setEditingAgent(agent)
+    setFormData({
+      id: agent.id,
+      name: agent.name,
+      description: agent.description || '',
+      url: agent.connection?.url || '',
+      auth_strategy: agent.connection?.auth_strategy || 'bearer',
+      triggers: (agent.intent_triggers || []).join(', ')
+    })
+    setShowForm(true)
+    setDropdownOpen(null)
   }
 
   const handleDiscover = async (url: string) => {
@@ -256,22 +289,91 @@ export default function Agents() {
                     )}
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: '5px' }}>
-                      {agent.connection?.url && (
-                        <button 
-                          onClick={() => handleDiscover(agent.connection.url)}
-                          style={{ padding: '4px 8px', fontSize: '11px', background: '#e9ecef', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                        >
-                          Discover
-                        </button>
-                      )}
-                      {!agent.approved && (
-                        <button 
-                          onClick={() => handleApprove(agent.id)}
-                          style={{ padding: '4px 8px', fontSize: '11px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                        >
-                          Approve
-                        </button>
+                    <div style={{ position: 'relative' }}>
+                      <button 
+                        onClick={() => setDropdownOpen(dropdownOpen === agent.id ? null : agent.id)}
+                        style={{ 
+                          padding: '4px 12px', 
+                          fontSize: '12px', 
+                          background: '#6c757d', 
+                          color: 'white', 
+                          border: 'none', 
+                          borderRadius: '4px', 
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        Actions ▾
+                      </button>
+                      
+                      {dropdownOpen === agent.id && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '100%',
+                          right: 0,
+                          background: 'white',
+                          border: '1px solid #ddd',
+                          borderRadius: '4px',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                          zIndex: 100,
+                          minWidth: '120px'
+                        }}>
+                          <button
+                            onClick={() => handleEdit(agent)}
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              padding: '8px 12px',
+                              textAlign: 'left',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.background = '#f8f9fa'}
+                            onMouseOut={(e) => e.currentTarget.style.background = 'none'}
+                          >
+                            ✏️ Edit
+                          </button>
+                          <button
+                            onClick={() => { setDropdownOpen(null); alert(`View agent: ${agent.id}\n\nName: ${agent.name}\nURL: ${agent.connection?.url}\nTriggers: ${(agent.intent_triggers || []).join(', ')}`); }}
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              padding: '8px 12px',
+                              textAlign: 'left',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.background = '#f8f9fa'}
+                            onMouseOut={(e) => e.currentTarget.style.background = 'none'}
+                          >
+                            👁️ View
+                          </button>
+                          <button
+                            onClick={() => handleDelete(agent.id)}
+                            disabled={deletingAgent === agent.id}
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              padding: '8px 12px',
+                              textAlign: 'left',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              color: '#dc3545'
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.background = '#f8f9fa'}
+                            onMouseOut={(e) => e.currentTarget.style.background = 'none'}
+                          >
+                            {deletingAgent === agent.id ? 'Deleting...' : '🗑️ Delete'}
+                          </button>
+                        </div>
                       )}
                     </div>
                   </td>
