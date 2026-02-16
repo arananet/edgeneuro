@@ -150,6 +150,50 @@ export default {
       }
     }
 
+    // --- GET NEURO SYMBOLIC CONFIG ---
+    if (request.method === 'GET' && url.pathname === '/v1/config/neuro') {
+      try {
+        const result = await env.DB.prepare(`
+          SELECT value FROM system_config WHERE key = 'neuro_symbolic_config'
+        `).first<{ value: string }>();
+
+        if (result?.value) {
+          return Response.json({ config: JSON.parse(result.value) }, { headers: CORS_HEADERS });
+        }
+        // Return default config
+        return Response.json({ 
+          config: {
+            enabled: true,
+            use_llm_validation: true,
+            confidence_threshold: 0.75,
+            fallback_to_neural: true,
+            knowledge_graph_enabled: true,
+            max_path_depth: 5
+          }
+        }, { headers: CORS_HEADERS });
+      } catch (e: any) {
+        return Response.json({ error: e.message }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    // --- SAVE NEURO SYMBOLIC CONFIG ---
+    if (request.method === 'POST' && url.pathname === '/v1/config/neuro') {
+      try {
+        const body = await request.json();
+        const configJson = JSON.stringify(body.config);
+
+        await env.DB.prepare(`
+          INSERT INTO system_config (key, value, updated_at)
+          VALUES ('neuro_symbolic_config', ?, datetime('now'))
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+        `).bind(configJson).run();
+
+        return Response.json({ success: true }, { headers: CORS_HEADERS });
+      } catch (e: any) {
+        return Response.json({ error: e.message }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
     // --- GET INTENT RULES ---
     if (request.method === 'GET' && url.pathname === '/v1/rules/intent') {
       try {

@@ -81,42 +81,73 @@ export default function Settings() {
   const [showRuleForm, setShowRuleForm] = useState(false)
   const [editingRule, setEditingRule] = useState<{ type: 'intent' | 'access', data?: IntentRule | AccessRule } | null>(null)
 
+  // Load all config from worker on mount
   useEffect(() => {
-    // Load saved config
-    const saved = localStorage.getItem('model_config')
-    if (saved) {
-      const config = JSON.parse(saved)
-      setModels(config.models || [])
-      setSelectedModel(config.active || 'llama-3.2-1b')
-    } else {
-      setSelectedModel('llama-3.2-1b')
-    }
+    // Load current model config from worker
+    fetch(`${ORCHESTRATOR_URL}/v1/config/model`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.model_id) {
+          setSelectedModel(data.model_id)
+        }
+      })
+      .catch(() => {})
 
-    // Load Neuro Symbolic config
-    const savedNeuro = localStorage.getItem('neuro_symbolic_config')
-    if (savedNeuro) {
-      setNeuroConfig(JSON.parse(savedNeuro))
-    }
+    // Load neuro symbolic config from worker
+    fetch(`${ORCHESTRATOR_URL}/v1/config/neuro`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.config) {
+          setNeuroConfig(data.config)
+        }
+      })
+      .catch(() => {})
 
-    // Load intent rules
-    const savedIntentRules = localStorage.getItem('intent_rules')
-    if (savedIntentRules) {
-      setIntentRules(JSON.parse(savedIntentRules))
-    } else {
-      // Default rules
-      setIntentRules([
-        { id: '1', pattern: 'vacation|pto|leave', agent_id: 'agent_hr', priority: 1, enabled: true },
-        { id: '2', pattern: 'vpn|network|login', agent_id: 'agent_it', priority: 2, enabled: true },
-        { id: '3', pattern: 'payroll|salary|bonus', agent_id: 'agent_finance', priority: 3, enabled: true },
-      ])
-    }
+    // Load intent rules from worker
+    fetch(`${ORCHESTRATOR_URL}/v1/rules/intent`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.rules && data.rules.length > 0) {
+          setIntentRules(data.rules.map((r: any) => ({
+            ...r,
+            enabled: r.enabled === 1
+          })))
+        } else {
+          // Default rules if none in DB
+          setIntentRules([
+            { id: '1', pattern: 'vacation|pto|leave', agent_id: 'agent_hr', priority: 1, enabled: true },
+            { id: '2', pattern: 'vpn|network|login', agent_id: 'agent_it', priority: 2, enabled: true },
+            { id: '3', pattern: 'payroll|salary|bonus', agent_id: 'agent_finance', priority: 3, enabled: true },
+          ])
+        }
+      })
+      .catch(() => {})
 
-    // Load access rules
-    const savedAccessRules = localStorage.getItem('access_rules')
-    if (savedAccessRules) {
-      setAccessRules(JSON.parse(savedAccessRules))
-    } else {
-      // Default rules
+    // Load access rules from worker
+    fetch(`${ORCHESTRATOR_URL}/v1/rules/access`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.rules && data.rules.length > 0) {
+          setAccessRules(data.rules.map((r: any) => ({
+            ...r,
+            enabled: r.enabled === 1
+          })))
+        } else {
+          // Default rules if none in DB
+          setAccessRules([
+            { id: '1', role: 'EMPLOYEE', topic: 'hr:leave', access_level: 'READ', enabled: true },
+            { id: '2', role: 'HR', topic: 'hr:*', access_level: 'ADMIN', enabled: true },
+            { id: '3', role: 'IT', topic: 'it:*', access_level: 'ADMIN', enabled: true },
+            { id: '4', role: 'MANAGER', topic: 'team:*', access_level: 'READ', enabled: true },
+            { id: '5', role: 'FINANCE', topic: 'payroll:*', access_level: 'ADMIN', enabled: true },
+          ])
+        }
+      })
+      .catch(() => {})
+
+    // Fetch available models from worker
+    fetchModels()
+  }, [])
       setAccessRules([
         { id: '1', role: 'EMPLOYEE', topic: 'hr:leave', access_level: 'READ', enabled: true },
         { id: '2', role: 'HR', topic: 'hr:*', access_level: 'ADMIN', enabled: true },
@@ -166,7 +197,6 @@ export default function Settings() {
       })
       const data = await res.json()
       if (data.success) {
-        localStorage.setItem('intent_rules', JSON.stringify(intentRules))
         return true
       }
     } catch (e) {}
@@ -182,7 +212,6 @@ export default function Settings() {
       })
       const data = await res.json()
       if (data.success) {
-        localStorage.setItem('access_rules', JSON.stringify(accessRules))
         return true
       }
     } catch (e) {}
@@ -265,10 +294,17 @@ export default function Settings() {
     setSavingModel(false)
   }
 
-  const handleNeuroConfigChange = (key: keyof NeuroSymbolicConfig, value: any) => {
+  const handleNeuroConfigChange = async (key: keyof NeuroSymbolicConfig, value: any) => {
     const updated = { ...neuroConfig, [key]: value }
     setNeuroConfig(updated)
-    localStorage.setItem('neuro_symbolic_config', JSON.stringify(updated))
+    // Save to worker
+    try {
+      await fetch(`${ORCHESTRATOR_URL}/v1/config/neuro`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: updated })
+      })
+    } catch (e) {}
   }
 
   // Cloudflare Handlers
