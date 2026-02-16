@@ -42,7 +42,7 @@
 /**
  * Node types in the knowledge graph
  */
-export type NodeType = 'USER' | 'ROLE' | 'GROUP' | 'TOPIC' | 'AGENT' | 'RULE' | 'CAPABILITY';
+export type NodeType = 'USER' | 'ROLE' | 'GROUP' | 'TOPIC' | 'AGENT' | 'RULE' | 'CAPABILITY' | 'INTENT';
 
 /**
  * Edge types (relationships) in the knowledge graph
@@ -191,6 +191,50 @@ export class KnowledgeGraph {
       { id: 'topic:ADMIN_PANEL', name: 'ADMIN_PANEL', sensitivity: 4 },
       { id: 'topic:GENERAL_SUPPORT', name: 'GENERAL_SUPPORT', sensitivity: 1 },
     ];
+
+    // Create default INTENT nodes (for symbolic intent detection)
+    const intents = [
+      { id: 'intent:IT_VPN', name: 'IT_VPN', keywords: 'vpn,network,connection,remote,wifi', topic: 'topic:IT_VPN', agent: 'agent:agent_it' },
+      { id: 'intent:IT_PASSWORD', name: 'IT_Password', keywords: 'password,login,reset,locked,access', topic: 'topic:IT_TICKETS', agent: 'agent:agent_it' },
+      { id: 'intent:IT_HARDWARE', name: 'IT_Hardware', keywords: 'computer,laptop,keyboard,mouse,monitor,printer', topic: 'topic:IT_HARDWARE', agent: 'agent:agent_it' },
+      { id: 'intent:IT_SOFTWARE', name: 'IT_Software', keywords: 'software,install,update,app,license', topic: 'topic:IT_TICKETS', agent: 'agent:agent_it' },
+      { id: 'intent:HR_VACATION', name: 'HR_Vacation', keywords: 'vacation,holiday,pto,leave,time off', topic: 'topic:BENEFITS', agent: 'agent:agent_hr' },
+      { id: 'intent:HR_PAYROLL', name: 'HR_Payroll', keywords: 'pay,salary,payroll,bonus,compensation', topic: 'topic:PAYROLL', agent: 'agent:agent_hr' },
+      { id: 'intent:HR_BENEFITS', name: 'HR_Benefits', keywords: 'benefits,insurance,health,dental,vision', topic: 'topic:BENEFITS', agent: 'agent:agent_hr' },
+      { id: 'intent:HR_HIRING', name: 'HR_Hiring', keywords: 'hire,recruit,interview,candidate,job', topic: 'topic:PERFORMANCE_REVIEWS', agent: 'agent:agent_hr' },
+      { id: 'intent:SALES', name: 'Sales', keywords: 'sales,revenue,deal,client,customer', topic: 'topic:SALES_REPORTS', agent: 'agent:agent_fallback' },
+      { id: 'intent:FINANCE', name: 'Finance', keywords: 'budget,expense,invoice,cost,financial', topic: 'topic:FINANCE_DASHBOARD', agent: 'agent:agent_fallback' },
+    ];
+
+    for (const intent of intents) {
+      this.addNode({
+        id: intent.id,
+        type: 'INTENT',
+        name: intent.name,
+        properties: { keywords: intent.keywords },
+        createdAt: Date.now()
+      });
+      
+      // Add edge: INTENT → TOPIC (maps to)
+      this.addEdge({
+        id: `${intent.id}_to_${intent.topic}`,
+        source: intent.id,
+        target: intent.topic,
+        type: 'MAPS_TO',
+        weight: 1.0,
+        createdAt: Date.now()
+      });
+      
+      // Add edge: INTENT → AGENT (routes to)
+      this.addEdge({
+        id: `${intent.id}_to_${intent.agent}`,
+        source: intent.id,
+        target: intent.agent,
+        type: 'ROUTES_TO',
+        weight: 1.0,
+        createdAt: Date.now()
+      });
+    }
 
     for (const topic of topics) {
       this.addNode({
@@ -356,6 +400,50 @@ export class KnowledgeGraph {
   }
 
   /**
+   * Find matching intents by query keywords
+   * This is the SYMBOLIC intent detection using the graph
+   */
+  findIntentsByQuery(query: string): { intent: KGNode; topic: string; agent: string; confidence: number }[] {
+    const results: { intent: KGNode; topic: string; agent: string; confidence: number }[] = [];
+    const queryLower = query.toLowerCase();
+    const queryWords = queryLower.split(/\s+/);
+    
+    const intents = this.getNodesByType('INTENT');
+    
+    for (const intent of intents) {
+      const keywords = (intent.properties.keywords || '') as string;
+      const keywordList = keywords.toLowerCase().split(',').map(k => k.trim());
+      
+      // Count keyword matches
+      let matches = 0;
+      for (const kw of keywordList) {
+        if (queryLower.includes(kw)) {
+          matches++;
+        }
+      }
+      
+      if (matches > 0) {
+        // Get mapped topic
+        const topicEdges = this.getOutEdges(intent.id).filter(e => e.type === 'MAPS_TO');
+        const topic = topicEdges[0]?.target?.replace('topic:', '') || 'GENERAL_SUPPORT';
+        
+        // Get mapped agent
+        const agentEdges = this.getOutEdges(intent.id).filter(e => e.type === 'ROUTES_TO');
+        const agent = agentEdges[0]?.target?.replace('agent:', '') || 'agent_fallback';
+        
+        // Confidence based on keyword coverage
+        const confidence = Math.min(matches / keywordList.length, 1.0);
+        
+        results.push({ intent, topic, agent, confidence });
+      }
+    }
+    
+    // Sort by confidence
+    results.sort((a, b) => b.confidence - a.confidence);
+    return results;
+  }
+
+  /**
    * Get outgoing edges from a node
    */
   getOutEdges(nodeId: string): KGEdge[] {
@@ -516,12 +604,13 @@ export class KnowledgeGraph {
   /**
    * Get graph statistics
    */
-  getStats(): { nodes: number; edges: number; roles: number; topics: number; capabilities: number } {
+  getStats(): { nodes: number; edges: number; roles: number; topics: number; intents: number; capabilities: number } {
     return {
       nodes: this.nodes.size,
       edges: this.edges.size,
       roles: this.getNodesByType('ROLE').length,
       topics: this.getNodesByType('TOPIC').length,
+      intents: this.getNodesByType('INTENT').length,
       capabilities: this.getNodesByType('CAPABILITY').length
     };
   }

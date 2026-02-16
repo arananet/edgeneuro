@@ -108,11 +108,32 @@ async function neuroSymbolicRouting(
   };
 
   // =========================================================================
-  // STEP 1: NEURAL - LLM Intent Detection
+  // STEP 1: SYMBOLIC - Knowledge Graph Intent Detection (PRIMARY)
   // =========================================================================
-  let detectedIntent = { topic: 'GENERAL_SUPPORT', confidence: 0.5 };
+  let detectedIntent = { topic: 'GENERAL_SUPPORT', confidence: 0, method: 'kg' };
   
-  if (env.AI && agents.length > 0) {
+  try {
+    const engine = new SymbolicEngine();
+    const kg = engine.getKnowledgeGraph();
+    const kgResults = kg.findIntentsByQuery(query);
+    
+    if (kgResults.length > 0) {
+      const best = kgResults[0];
+      detectedIntent = {
+        topic: best.topic.replace('topic:', ''),
+        confidence: best.confidence,
+        method: 'knowledge_graph'
+      };
+    }
+  } catch (e) {
+    // KG failed, continue to LLM
+  }
+
+  // =========================================================================
+  // STEP 2: NEURAL - LLM Intent Detection (FALLBACK)
+  // =========================================================================
+  // Only use LLM if KG didn't find a confident match
+  if (detectedIntent.confidence < 0.5 && env.AI && agents.length > 0) {
     const modelId = await getRoutingModel(env.DB);
     
     try {
@@ -137,17 +158,18 @@ Reply with JSON: {"topic": "TOPIC", "confidence": 0.0-1.0}`
           const parsed = JSON.parse(jsonMatch[0]);
           detectedIntent = {
             topic: parsed.topic || 'GENERAL_SUPPORT',
-            confidence: parsed.confidence || 0.5
+            confidence: parsed.confidence || 0.5,
+            method: 'llm'
           };
         }
       }
     } catch (e) {
-      // LLM failed, continue with default intent
+      // LLM failed, keep KG result
     }
   }
 
   // =========================================================================
-  // STEP 2: SYMBOLIC - Knowledge Graph Access Control
+  // STEP 3: SYMBOLIC - Knowledge Graph Access Control
   // =========================================================================
   const engine = new SymbolicEngine();
   const userProfile = {
