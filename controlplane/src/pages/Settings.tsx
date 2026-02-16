@@ -327,7 +327,7 @@ export default function Settings() {
             <div style={{ marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '6px' }}>
               <h4 style={{ margin: '0 0 10px', fontSize: '14px' }}>☁️ Cloudflare API (Optional)</h4>
               <p style={{ marginBottom: '15px', fontSize: '12px', color: '#666' }}>
-                Click "Fetch Models" to get available models from Cloudflare. Configure credentials as worker secrets (not in UI).
+                To fetch available models, first set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN as secrets in synapse_core worker.
               </p>
               
               <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
