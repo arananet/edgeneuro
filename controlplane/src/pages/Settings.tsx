@@ -187,15 +187,6 @@ export default function Settings() {
     // Fetch available models from worker
     fetchModels()
   }, [])
-      setAccessRules([
-        { id: '1', role: 'EMPLOYEE', topic: 'hr:leave', access_level: 'READ', enabled: true },
-        { id: '2', role: 'HR', topic: 'hr:*', access_level: 'ADMIN', enabled: true },
-        { id: '3', role: 'IT', topic: 'it:*', access_level: 'ADMIN', enabled: true },
-        { id: '4', role: 'MANAGER', topic: 'team:*', access_level: 'READ', enabled: true },
-        { id: '5', role: 'FINANCE', topic: 'payroll:*', access_level: 'ADMIN', enabled: true },
-      ])
-    }
-  }, [])
 
   // Save rules to worker
   const saveIntentRulesToWorker = async () => {
