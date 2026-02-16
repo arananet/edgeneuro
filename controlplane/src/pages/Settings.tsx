@@ -59,8 +59,6 @@ export default function Settings() {
   const [selectedModel, setSelectedModel] = useState('')
 
   // Cloudflare Config
-  const [cfAccountId, setCfAccountId] = useState('')
-  const [cfApiToken, setCfApiToken] = useState('')
   const [cfModels, setCfModels] = useState<CloudflareModel[]>([])
   const [cfLoading, setCfLoading] = useState(false)
   const [cfError, setCfError] = useState('')
@@ -129,21 +127,21 @@ export default function Settings() {
     }
   }, [])
 
-  // Load Cloudflare config and current model on mount
+  // Load current model and fetch available models on mount
   useEffect(() => {
-    const savedCfConfig = localStorage.getItem('cloudflare_config')
-    if (savedCfConfig) {
-      const config = JSON.parse(savedCfConfig)
-      setCfAccountId(config.account_id || '')
-      setCfApiToken(config.api_token || '')
-    }
-
     // Load current model config from worker
     fetch(`${ORCHESTRATOR_URL}/v1/config/model`)
       .then(res => res.json())
       .then(data => {
         if (data.model_id) {
           setSelectedModel(data.model_id)
+        }
+      })
+      .catch(() => {})
+
+    // Fetch available models from worker
+    fetchModels()
+  }, [])
         }
       })
       .catch(() => {})
@@ -174,49 +172,36 @@ export default function Settings() {
     setSavingModel(false)
   }
 
-  // Cloudflare Handlers
-  const saveCloudflareConfig = () => {
-    localStorage.setItem('cloudflare_config', JSON.stringify({
-      account_id: cfAccountId,
-      api_token: cfApiToken
-    }))
-    setCfError('')
-  }
-
-  const fetchCloudflareModels = async () => {
-    if (!cfAccountId || !cfApiToken) {
-      setCfError('Please enter Account ID and API Token')
-      return
-    }
-
+  // Fetch models from worker (which calls Cloudflare server-side)
+  const fetchModels = async () => {
     setCfLoading(true)
     setCfError('')
 
     try {
-      const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/ai/models/search?per_page=50`, {
-        headers: {
-          'Authorization': `Bearer ${cfApiToken}`
-        }
-      })
+      const res = await fetch(`${ORCHESTRATOR_URL}/v1/models`)
+      const data = await res.json()
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
-      }
-
-      const data = await response.json()
-      
-      if (data.success && data.result) {
-        const textModels = data.result.filter((m: any) => 
-          m.task === 'text-generation' || m.task === 'chat' || 
-          m.id.includes('llama') || m.id.includes('gemma') || m.id.includes('mistral')
-        )
-        setCfModels(textModels)
-      } else {
-        throw new Error(data.errors?.[0]?.message || 'Failed to fetch models')
+      if (data.error) {
+        setCfError(data.error + '. Make sure CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN secrets are set in the worker.')
+        // Show fallback models
+        setCfModels([
+          { id: '@cf/meta/llama-3.2-1b-instruct', task: 'text-generation' },
+          { id: '@cf/meta/llama-3.2-3b-instruct', task: 'text-generation' },
+          { id: '@cf/meta/llama-3.1-8b-instruct', task: 'text-generation' },
+          { id: '@cf/google/gemma-2-27b-instruct', task: 'text-generation' },
+        ])
+      } else if (data.models) {
+        setCfModels(data.models)
       }
     } catch (err: any) {
       setCfError(err.message || 'Failed to fetch models')
-      setCfModels([])
+      // Fallback models
+      setCfModels([
+        { id: '@cf/meta/llama-3.2-1b-instruct', task: 'text-generation' },
+        { id: '@cf/meta/llama-3.2-3b-instruct', task: 'text-generation' },
+        { id: '@cf/meta/llama-3.1-8b-instruct', task: 'text-generation' },
+        { id: '@cf/google/gemma-2-27b-instruct', task: 'text-generation' },
+      ])
     }
 
     setCfLoading(false)
@@ -346,42 +331,14 @@ export default function Settings() {
             <div style={{ marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '6px' }}>
               <h4 style={{ margin: '0 0 10px', fontSize: '14px' }}>☁️ Cloudflare API (Optional)</h4>
               <p style={{ marginBottom: '15px', fontSize: '12px', color: '#666' }}>
-                Enter your Cloudflare credentials to fetch available models. Credentials are stored locally and never sent to our servers.
+                Click "Fetch Models" to get available models from Cloudflare. Configure credentials as worker secrets (not in UI).
               </p>
               
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">Account ID</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={cfAccountId}
-                    onChange={e => setCfAccountId(e.target.value)}
-                    placeholder="023e105f4ecef8ad9ca31a8372d0c353"
-                    style={{ fontSize: '12px' }}
-                  />
-                </div>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">API Token</label>
-                  <input
-                    type="password"
-                    className="form-input"
-                    value={cfApiToken}
-                    onChange={e => setCfApiToken(e.target.value)}
-                    placeholder="Bearer token"
-                    style={{ fontSize: '12px' }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button className="btn btn-secondary" onClick={saveCloudflareConfig} style={{ padding: '4px 12px', fontSize: '12px' }}>
-                  Save Credentials
-                </button>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                 <button 
                   className="btn btn-primary" 
-                  onClick={fetchCloudflareModels}
-                  disabled={cfLoading || !cfAccountId || !cfApiToken}
+                  onClick={fetchModels}
+                  disabled={cfLoading}
                   style={{ padding: '4px 12px', fontSize: '12px' }}
                 >
                   {cfLoading ? 'Fetching...' : 'Fetch Models'}
