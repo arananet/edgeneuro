@@ -189,27 +189,14 @@ export default function Settings() {
         <>
           <div className="card">
             <div className="card-header"><h3 className="card-title">AI Model Configuration</h3></div>
-            <p style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>Select the model for intent classification.</p>
             
-            {selectedModel && (
-              <div style={{ marginBottom: '20px', padding: '10px', background: '#e7f3ff', borderRadius: '6px' }}>
+            {selectedModel ? (
+              <div style={{ marginBottom: '20px', padding: '15px', background: '#d4edda', borderRadius: '6px' }}>
                 <strong>Current Model:</strong> <code>{selectedModel}</code>
               </div>
-            )}
-            
-            <div className="form-group">
-              <label className="form-label">Select Model</label>
-              <select className="form-select" value={selectedModel} onChange={e => setSelectedModel(e.target.value)}>
-                <option value="">-- Select a model --</option>
-                {cfModels.length > 0 ? cfModels.map(m => <option key={m.id} value={m.id}>{m.id}</option>) :
-                  AVAILABLE_MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </div>
-            {selectedModel && (
-              <div style={{ marginTop: '15px' }}>
-                <button className="btn btn-primary" onClick={saveSelectedModel} disabled={savingModel}>
-                  {savingModel ? 'Saving...' : 'Save Configuration'}
-                </button>
+            ) : (
+              <div style={{ marginBottom: '20px', padding: '15px', background: '#fff3cd', borderRadius: '6px' }}>
+                ⚠️ No model selected. Select one from below and click "Save Configuration".
               </div>
             )}
           </div>
@@ -217,23 +204,50 @@ export default function Settings() {
           <div className="card">
             <div className="card-header"><h3 className="card-title">☁️ Available Models in Cloudflare</h3></div>
             <p style={{ marginBottom: '15px', color: 'var(--text-secondary)' }}>
-              Select a model from the dropdown above. The list is fetched from Cloudflare's API using the credentials configured in the worker.
+              Click "Set as Active" to select a model. The model will be used for intent classification.
             </p>
-            <button className="btn btn-secondary" onClick={fetchModels} disabled={cfLoading}>
+            <button className="btn btn-secondary" onClick={fetchModels} disabled={cfLoading} style={{ marginBottom: '15px' }}>
               {cfLoading ? 'Fetching...' : 'Refresh Model List'}
             </button>
-            {cfError && <p style={{ color: '#dc3545', marginTop: '10px' }}>{cfError}</p>}
+            {cfError && <p style={{ color: '#dc3545', marginBottom: '15px' }}>{cfError}</p>}
             
-            {cfModels.length > 0 && (
-              <div style={{ marginTop: '15px' }}>
-                <p style={{ fontSize: '12px', color: '#666' }}>Found {cfModels.length} models:</p>
-                <ul style={{ fontSize: '11px', color: '#666', maxHeight: '150px', overflow: 'auto' }}>
-                  {cfModels.slice(0, 10).map(m => <li key={m.id}>{m.id}</li>)}
-                  {cfModels.length > 10 && <li>...and {cfModels.length - 10} more</li>}
-                </ul>
-              </div>
+            {cfModels.length > 0 ? (
+              <table className="table">
+                <thead><tr><th>Model ID</th><th>Task</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {cfModels.map(m => (
+                    <tr key={m.id}>
+                      <td><code>{m.id}</code></td>
+                      <td>{m.task || '-'}</td>
+                      <td>
+                        {selectedModel === m.id ? (
+                          <span className="badge badge-success">Active</span>
+                        ) : (
+                          <button 
+                            className="btn btn-primary" 
+                            style={{ padding: '4px 12px', fontSize: '12px' }}
+                            onClick={() => { setSelectedModel(m.id); }}
+                          >
+                            Set as Active
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p style={{ color: '#666' }}>Click "Refresh Model List" to fetch available models from Cloudflare.</p>
             )}
           </div>
+
+          {selectedModel && (
+            <div style={{ marginTop: '15px', textAlign: 'center' }}>
+              <button className="btn btn-success" onClick={saveSelectedModel} disabled={savingModel}>
+                {savingModel ? 'Saving...' : 'Save Configuration'}
+              </button>
+            </div>
+          )}
         </>
       )}
 
