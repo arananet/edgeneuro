@@ -23,7 +23,8 @@ EdgeNeuro follows a "Hot Potato" architecture where the router introduces client
 │         └───────────────────┼───────────────────┘            │
 │                             ▼                                │
 │                    ┌────────────────┐                         │
-│                    │  Workers AI    │                         │
+│                    │  Knowledge   │                         │
+│                    │    Graph    │                         │
 │                    │ (Llama-3-8B)  │                         │
 │                    └────────────────┘                         │
 │                                                              │
@@ -33,7 +34,7 @@ EdgeNeuro follows a "Hot Potato" architecture where the router introduces client
 ## Data Flow
 
 1. **Request** → User sends query to SynapseCore
-2. **Intent Detection** → Workers AI classifies intent
+2. **Intent Detection** → Knowledge Graph classifies intent
 3. **Agent Selection** → Router selects best matching agent
 4. **Handoff** → Returns A2A connect info (no proxy)
 5. **Direct Connection** → Client connects directly to agent
