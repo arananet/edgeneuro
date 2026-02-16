@@ -132,62 +132,6 @@ export default function Settings() {
     fetchModels()
   }, [])
 
-    // Load neuro symbolic config from worker
-    fetch(`${ORCHESTRATOR_URL}/v1/config/neuro`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.config) {
-          setNeuroConfig(data.config)
-        }
-      })
-      .catch(() => {})
-
-    // Load intent rules from worker
-    fetch(`${ORCHESTRATOR_URL}/v1/rules/intent`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.rules && data.rules.length > 0) {
-          setIntentRules(data.rules.map((r: any) => ({
-            ...r,
-            enabled: r.enabled === 1
-          })))
-        } else {
-          // Default rules if none in DB
-          setIntentRules([
-            { id: '1', pattern: 'vacation|pto|leave', agent_id: 'agent_hr', priority: 1, enabled: true },
-            { id: '2', pattern: 'vpn|network|login', agent_id: 'agent_it', priority: 2, enabled: true },
-            { id: '3', pattern: 'payroll|salary|bonus', agent_id: 'agent_finance', priority: 3, enabled: true },
-          ])
-        }
-      })
-      .catch(() => {})
-
-    // Load access rules from worker
-    fetch(`${ORCHESTRATOR_URL}/v1/rules/access`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.rules && data.rules.length > 0) {
-          setAccessRules(data.rules.map((r: any) => ({
-            ...r,
-            enabled: r.enabled === 1
-          })))
-        } else {
-          // Default rules if none in DB
-          setAccessRules([
-            { id: '1', role: 'EMPLOYEE', topic: 'hr:leave', access_level: 'READ', enabled: true },
-            { id: '2', role: 'HR', topic: 'hr:*', access_level: 'ADMIN', enabled: true },
-            { id: '3', role: 'IT', topic: 'it:*', access_level: 'ADMIN', enabled: true },
-            { id: '4', role: 'MANAGER', topic: 'team:*', access_level: 'READ', enabled: true },
-            { id: '5', role: 'FINANCE', topic: 'payroll:*', access_level: 'ADMIN', enabled: true },
-          ])
-        }
-      })
-      .catch(() => {})
-
-    // Fetch available models from worker
-    fetchModels()
-  }, [])
-
   // Save rules to worker
   const saveIntentRulesToWorker = async () => {
     try {
