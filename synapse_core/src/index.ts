@@ -22,6 +22,53 @@ export { SynapseState };
 
 const DEFAULT_ROUTING_MODEL = '@cf/meta/llama-3.2-1b-instruct';
 
+// ============================================================================
+// OBSERVABILITY: Logging Functions
+// ============================================================================
+
+function generateId(): string {
+  return crypto.randomUUID();
+}
+
+interface LogEntry {
+  id?: string;
+  timestamp?: number;
+  level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+  type: 'ai_request' | 'ai_response' | 'worker_error' | 'access_denied' | 'routing' | 'system';
+  agent_id?: string;
+  model_id?: string;
+  prompt?: string;
+  response?: string;
+  tokens_input?: number;
+  tokens_output?: number;
+  latency_ms?: number;
+  error_message?: string;
+  metadata?: string;
+  user_id?: string;
+  session_id?: string;
+}
+
+async function logRequest(DB: D1Database, entry: LogEntry): Promise<void> {
+  try {
+    const id = entry.id || generateId();
+    const timestamp = entry.timestamp || Math.floor(Date.now() / 1000);
+    
+    await DB.prepare(`
+      INSERT INTO request_logs (
+        id, timestamp, level, type, agent_id, model_id, prompt, response,
+        tokens_input, tokens_output, latency_ms, error_message, metadata, user_id, session_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      id, timestamp, entry.level, entry.type, entry.agent_id || null,
+      entry.model_id || null, entry.prompt || null, entry.response || null,
+      entry.tokens_input || null, entry.tokens_output || null, entry.latency_ms || null,
+      entry.error_message || null, entry.metadata || null, entry.user_id || null, entry.session_id || null
+    ).run();
+  } catch (e) {
+    console.error('Failed to write log:', e);
+  }
+}
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -262,6 +309,113 @@ export default {
       }
     }
 
+    // ============================================================================
+    // OBSERVABILITY: Logs Endpoints
+    // ============================================================================
+
+    // --- GET LOGS (with filtering) ---
+    if (request.method === 'GET' && url.pathname === '/v1/logs') {
+      try {
+        const type = url.searchParams.get('type');
+        const level = url.searchParams.get('level');
+        const agent = url.searchParams.get('agent');
+        const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 200);
+        const offset = parseInt(url.searchParams.get('offset') || '0');
+        
+        let query = 'SELECT * FROM request_logs WHERE 1=1';
+        const bindings: any[] = [];
+        
+        if (type) {
+          query += ' AND type = ?';
+          bindings.push(type);
+        }
+        if (level) {
+          query += ' AND level = ?';
+          bindings.push(level);
+        }
+        if (agent) {
+          query += ' AND agent_id = ?';
+          bindings.push(agent);
+        }
+        
+        query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';
+        bindings.push(limit, offset);
+        
+        const result = await env.DB.prepare(query).bind(...bindings).all();
+        
+        // Get total count for pagination
+        let countQuery = 'SELECT COUNT(*) as total FROM request_logs WHERE 1=1';
+        const countBindings: any[] = [];
+        if (type) { countQuery += ' AND type = ?'; countBindings.push(type); }
+        if (level) { countQuery += ' AND level = ?'; countBindings.push(level); }
+        if (agent) { countQuery += ' AND agent_id = ?'; countBindings.push(agent); }
+        
+        const countResult = await env.DB.prepare(countQuery).bind(...countBindings).first<{ total: number }>();
+        
+        return Response.json({
+          logs: result.results,
+          pagination: {
+            total: countResult?.total || 0,
+            limit,
+            offset,
+            has_more: (offset + limit) < (countResult?.total || 0)
+          }
+        }, { headers: CORS_HEADERS });
+      } catch (e: any) {
+        return Response.json({ error: e.message }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    // --- WRITE LOG (for external logging) ---
+    if (request.method === 'POST' && url.pathname === '/v1/logs') {
+      try {
+        const body = await request.json();
+        
+        const entry: LogEntry = {
+          id: body.id || generateId(),
+          timestamp: body.timestamp || Math.floor(Date.now() / 1000),
+          level: body.level || 'INFO',
+          type: body.type || 'system',
+          agent_id: body.agent_id,
+          model_id: body.model_id,
+          prompt: body.prompt,
+          response: body.response,
+          tokens_input: body.tokens_input,
+          tokens_output: body.tokens_output,
+          latency_ms: body.latency_ms,
+          error_message: body.error_message,
+          metadata: body.metadata ? JSON.stringify(body.metadata) : null,
+          user_id: body.user_id,
+          session_id: body.session_id
+        };
+        
+        await logRequest(env.DB, entry);
+        
+        return Response.json({ success: true, id: entry.id }, { headers: CORS_HEADERS });
+      } catch (e: any) {
+        return Response.json({ error: e.message }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    // --- CLEAR LOGS (admin) ---
+    if (request.method === 'DELETE' && url.pathname === '/v1/logs') {
+      const auth = request.headers.get('X-Agent-Secret');
+      if (auth !== env.AGENT_SECRET) {
+        return new Response('Unauthorized', { status: 401, headers: CORS_HEADERS });
+      }
+      
+      try {
+        const days = parseInt(url.searchParams.get('days') || '7');
+        const cutoff = Math.floor(Date.now() / 1000) - (days * 86400);
+        
+        await env.DB.prepare('DELETE FROM request_logs WHERE timestamp < ?').bind(cutoff).run();
+        
+        return Response.json({ success: true, deleted_older_than_days: days }, { headers: CORS_HEADERS });
+      } catch (e: any) {
+        return Response.json({ error: e.message }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
     // --- LIST AGENTS ---
     if (request.method === 'GET' && url.pathname === '/v1/agents') {
       const agents = await getAllAgents(env.DB);
@@ -272,52 +426,101 @@ export default {
     if (request.method === 'GET' && url.pathname === '/v1/test') {
       const query = url.searchParams.get('q') || '';
       const agents = await getActiveAgents(env.DB);
+      const modelId = await getRoutingModel(env.DB);
+      const startTime = Date.now();
       
       let decision = { target: 'agent_fallback', confidence: 0.0, reason: 'No AI available' };
+      let aiUsed = false;
+      let aiError: string | null = null;
       
       if (env.AI && agents.length > 0) {
         try {
-          const response = await env.AI.run(await getRoutingModel(env.DB), {
+          // Log AI request
+          await logRequest(env.DB, {
+            level: 'INFO',
+            type: 'ai_request',
+            model_id: modelId,
+            prompt: `Route this query: "${query}"`,
+            agent_id: 'routing',
+            latency_ms: 0
+          });
+          
+          const response = await env.AI.run(modelId, {
             messages: [
               { role: 'system', content: buildSystemPrompt(agents) },
               { role: 'user', content: `Route this query: "${query}"` },
             ],
           });
           
-          const jsonMatch = response.response?.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            decision = { 
-              target: parsed.target || 'agent_fallback', 
-              confidence: parsed.confidence || 0.5,
-              reason: parsed.reason || 'LLM decision'
-            };
-          }
-        } catch (e: any) {
-          decision.reason = `LLM error: ${e.message}`;
-        }
-      } else {
-        // Keyword-based routing (fallback when no AI)
-        const q = query.toLowerCase();
-        
-        // First try DB-based intent rules
-        try {
-          const rulesResult = await env.DB.prepare(`
-            SELECT * FROM intent_rules WHERE enabled = 1 ORDER BY priority ASC
-          `).all();
+          const latencyMs = Date.now() - startTime;
+          aiUsed = true;
           
-          const rules = rulesResult.results as any[];
-          for (const rule of rules) {
-            const pattern = new RegExp(rule.pattern, 'i');
-            if (pattern.test(query)) {
-              decision.target = rule.agent_id;
-              decision.confidence = 0.9;
-              decision.reason = `Intent rule match: ${rule.pattern}`;
-              break;
+          // Validate response
+          if (!response.response) {
+            aiError = 'Empty response from AI';
+            decision.reason = aiError;
+          } else {
+            const jsonMatch = response.response.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              try {
+                const parsed = JSON.parse(jsonMatch[0]);
+                decision = { 
+                  target: parsed.target || 'agent_fallback', 
+                  confidence: parsed.confidence || 0.5,
+                  reason: parsed.reason || 'LLM decision'
+                };
+                
+                // Log AI response
+                await logRequest(env.DB, {
+                  level: 'INFO',
+                  type: 'ai_response',
+                  model_id: modelId,
+                  response: JSON.stringify(decision),
+                  agent_id: 'routing',
+                  latency_ms: latencyMs
+                });
+              } catch (parseErr: any) {
+                aiError = `Failed to parse AI response: ${parseErr.message}`;
+                decision.reason = aiError;
+              }
+            } else {
+              aiError = 'AI response contained no valid JSON';
+              decision.reason = aiError;
             }
           }
         } catch (e: any) {
-          // Fallback to agent triggers if DB query fails
+          aiUsed = true;
+          aiError = e.message || 'Unknown AI error';
+          decision.reason = `AI error: ${aiError}`;
+          
+          // Log error
+          await logRequest(env.DB, {
+            level: 'ERROR',
+            type: 'worker_error',
+            model_id: modelId,
+            error_message: aiError,
+            agent_id: 'routing',
+            latency_ms: Date.now() - startTime
+          });
+        }
+      } else {
+        // No AI - use symbolic intent detection
+        const detector = new SymbolicIntentDetector();
+        const detected = detector.detect(query, { userId: 'anonymous', role: 'EMPLOYEE', department: '', sessionActive: true });
+        
+        if (detected.intent && detected.confidence > 0.5) {
+          // Map detected intent to agent
+          const intent = INTENT_TAXONOMY.find(i => i.id === detected.intent);
+          if (intent?.agent && agents.find(a => a.id === intent.agent)) {
+            decision.target = intent.agent;
+            decision.confidence = detected.confidence;
+            decision.reason = `Symbolic intent: ${detected.intent}`;
+          }
+        }
+        
+        // If symbolic failed, try keyword matching
+        if (decision.confidence < 0.5) {
+          const q = query.toLowerCase();
           for (const agent of agents) {
             const triggers = agent.intent_triggers || [];
             for (const trigger of triggers) {
@@ -332,10 +535,31 @@ export default {
         }
       }
       
+      // Always try symbolic intent detection as validation/override
+      // This uses the Knowledge Graph for deterministic routing
+      try {
+        const detector = new SymbolicIntentDetector();
+        const detected = detector.detect(query, { userId: 'anonymous', role: 'EMPLOYEE', department: '', sessionActive: true });
+        
+        if (detected.intent && detected.confidence > 0.7) {
+          const intent = INTENT_TAXONOMY.find(i => i.id === detected.intent);
+          if (intent?.agent && agents.find(a => a.id === intent.agent)) {
+            // Override LLM decision if symbolic is confident
+            decision.target = intent.agent;
+            decision.confidence = detected.confidence;
+            decision.reason = `Knowledge Graph override: ${detected.intent} (confidence: ${detected.confidence})`;
+          }
+        }
+      } catch (e) {
+        // Symbolic detection failed, keep LLM decision
+      }
+      
       return Response.json({
         query,
         decision,
-        ai_used: !!env.AI,
+        ai_used: aiUsed,
+        ai_error: aiError,
+        model_used: modelId,
         agents_available: agents.map((a: any) => a.id)
       }, { headers: CORS_HEADERS });
     }
@@ -946,24 +1170,91 @@ export default {
     if (!query) return new Response('EdgeNeuro SynapseCore Active', { status: 200, headers: CORS_HEADERS });
 
     const agents = await getActiveAgents(env.DB);
+    const modelId = await getRoutingModel(env.DB);
+    const startTime = Date.now();
     let decision = { target: 'agent_fallback', confidence: 0.0 };
+    let aiUsed = false;
+    let aiError: string | null = null;
     
     if (env.AI && agents.length > 0) {
       try {
-        const response = await env.AI.run(await getRoutingModel(env.DB), {
+        // Log AI request
+        await logRequest(env.DB, {
+          level: 'INFO',
+          type: 'ai_request',
+          model_id: modelId,
+          prompt: query,
+          agent_id: 'routing',
+          latency_ms: 0
+        });
+        
+        const response = await env.AI.run(modelId, {
           messages: [
             { role: 'system', content: buildSystemPrompt(agents) },
             { role: 'user', content: query },
           ],
         });
 
-        const jsonMatch = response.response?.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          decision = { target: parsed.target || 'agent_fallback', confidence: parsed.confidence || 0.5 };
+        const latencyMs = Date.now() - startTime;
+        aiUsed = true;
+        
+        if (!response.response) {
+          aiError = 'Empty response from AI';
+          await logRequest(env.DB, {
+            level: 'ERROR',
+            type: 'worker_error',
+            model_id: modelId,
+            error_message: aiError,
+            agent_id: 'routing',
+            latency_ms: latencyMs
+          });
+        } else {
+          const jsonMatch = response.response.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            try {
+              const parsed = JSON.parse(jsonMatch[0]);
+              decision = { target: parsed.target || 'agent_fallback', confidence: parsed.confidence || 0.5 };
+              
+              // Log AI response
+              await logRequest(env.DB, {
+                level: 'INFO',
+                type: 'ai_response',
+                model_id: modelId,
+                response: JSON.stringify(decision),
+                agent_id: 'routing',
+                latency_ms: latencyMs
+              });
+            } catch (parseErr: any) {
+              aiError = `Failed to parse AI response: ${parseErr.message}`;
+            }
+          } else {
+            aiError = 'AI response contained no valid JSON';
+          }
         }
-      } catch (e) {
-        console.error('AI Error:', e);
+        
+        if (aiError) {
+          await logRequest(env.DB, {
+            level: 'ERROR',
+            type: 'worker_error',
+            model_id: modelId,
+            error_message: aiError,
+            agent_id: 'routing',
+            latency_ms: Date.now() - startTime
+          });
+        }
+      } catch (e: any) {
+        aiUsed = true;
+        aiError = e.message || 'Unknown AI error';
+        console.error('AI Error:', aiError);
+        
+        await logRequest(env.DB, {
+          level: 'ERROR',
+          type: 'worker_error',
+          model_id: modelId,
+          error_message: aiError,
+          agent_id: 'routing',
+          latency_ms: Date.now() - startTime
+        });
       }
     }
 
@@ -977,6 +1268,13 @@ export default {
         type: 'a2a/connect',
         target: { id: targetAgent.id, endpoint: targetAgent.connection.url, auth_headers: { 'X-Guest': 'true' } },
         trace_id: traceId,
+        // Debug info
+        _debug: {
+          ai_used: aiUsed,
+          ai_error: aiError,
+          model_used: modelId,
+          latency_ms: Date.now() - startTime
+        }
       },
       { headers: { ...CORS_HEADERS, 'X-A2A-Version': '1.0', 'X-A2A-Trace-Id': traceId } },
     );

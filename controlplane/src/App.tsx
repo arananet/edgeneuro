@@ -7,6 +7,7 @@ import Discovery from './pages/Discovery'
 import Testing from './pages/Testing'
 import Evaluation from './pages/Evaluation'
 import Settings from './pages/Settings'
+import Logs from './pages/Logs'
 import Layout from './components/Layout'
 
 // OAuth Callback component
@@ -80,6 +81,7 @@ function App() {
           <Route path="/testing" element={<Testing />} />
           <Route path="/evaluation" element={<Evaluation />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/logs" element={<Logs />} />
           <Route path="/oauth/callback" element={<OAuthCallback />} />
         </Routes>
       </Layout>

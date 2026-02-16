@@ -181,6 +181,16 @@ CREATE TABLE IF NOT EXISTS intent_rules (
   created_at INTEGER DEFAULT (strftime('%s', 'now'))
 );
 
+-- Default intent rules (seed data)
+INSERT OR IGNORE INTO intent_rules (id, pattern, agent_id, priority, enabled) VALUES
+  ('rule_vpn', '(?i)(vpn|network|connection|remote|connect|wifi)', 'agent_it', 1, 1),
+  ('rule_password', '(?i)(password|login|access|locked|reset)', 'agent_it', 2, 1),
+  ('rule_hardware', '(?i)(computer|laptop|keyboard|mouse|monitor|hardware|printer)', 'agent_it', 3, 1),
+  ('rule_software', '(?i)(software|install|update|app|application)', 'agent_it', 4, 1),
+  ('rule_vacation', '(?i)(vacation|holiday|pto|leave|time off|benefits)', 'agent_hr', 1, 1),
+  ('rule_payroll', '(?i)(pay|salary|payroll|bonus|compensation)', 'agent_hr', 2, 1),
+  ('rule_hiring', '(?i)(hire|recruit|interview|candidate|job)', 'agent_hr', 3, 1);
+
 -- Access Control Rules (role -> topic -> access level)
 CREATE TABLE IF NOT EXISTS access_rules (
   id TEXT PRIMARY KEY,
@@ -190,3 +200,31 @@ CREATE TABLE IF NOT EXISTS access_rules (
   enabled INTEGER DEFAULT 1,
   created_at INTEGER DEFAULT (strftime('%s', 'now'))
 );
+
+-- ============================================================================
+-- OBSERVABILITY & LOGGING
+-- ============================================================================
+
+-- Request/AI Logs for observability
+CREATE TABLE IF NOT EXISTS request_logs (
+  id TEXT PRIMARY KEY,
+  timestamp INTEGER DEFAULT (strftime('%s', 'now')),
+  level TEXT DEFAULT 'INFO',  -- DEBUG, INFO, WARN, ERROR
+  type TEXT NOT NULL,  -- 'ai_request', 'ai_response', 'worker_error', 'access_denied', 'routing'
+  agent_id TEXT,
+  model_id TEXT,
+  prompt TEXT,
+  response TEXT,
+  tokens_input INTEGER,
+  tokens_output INTEGER,
+  latency_ms INTEGER,
+  error_message TEXT,
+  metadata TEXT,  -- JSON additional data
+  user_id TEXT,
+  session_id TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_request_logs_timestamp ON request_logs(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_request_logs_type ON request_logs(type);
+CREATE INDEX IF NOT EXISTS idx_request_logs_agent ON request_logs(agent_id);
+CREATE INDEX IF NOT EXISTS idx_request_logs_level ON request_logs(level);

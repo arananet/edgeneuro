@@ -118,7 +118,7 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['can\'t connect', 'not working', 'connection failed', 'network error'],
     related: ['intent:IT_PASSWORD', 'intent:IT_ACCESS'],
     requiresContext: false,
-    agent: 'it-agent',
+    agent: 'agent_it',
     sensitivity: 2
   },
   {
@@ -130,7 +130,7 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['forgot password', 'can\'t login', 'reset my password', 'account locked'],
     related: ['intent:IT_VPN', 'intent:IT_ACCESS'],
     requiresContext: false,
-    agent: 'it-agent',
+    agent: 'agent_it',
     sensitivity: 2
   },
   {
@@ -142,7 +142,7 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['need a laptop', 'broken screen', 'new computer', 'equipment request'],
     related: ['intent:IT_TICKET'],
     requiresContext: false,
-    agent: 'it-agent',
+    agent: 'agent_it',
     sensitivity: 1
   },
   {
@@ -154,7 +154,7 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['create ticket', 'check ticket', 'support request', 'open ticket'],
     related: ['intent:IT_VPN', 'intent:IT_PASSWORD'],
     requiresContext: false,
-    agent: 'it-agent',
+    agent: 'agent_it',
     sensitivity: 1
   },
 
@@ -168,7 +168,7 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['vacation days', 'benefits info', 'health insurance', 'time off'],
     related: ['intent:HR_PAYROLL', 'intent:HR_POLICIES'],
     requiresContext: false,
-    agent: 'hr-agent',
+    agent: 'agent_hr',
     sensitivity: 2
   },
   {
@@ -180,7 +180,7 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['my pay', 'paycheck', 'salary', 'bonus', 'compensation'],
     related: ['intent:HR_BENEFITS'],
     requiresContext: true,  // Sensitive!
-    agent: 'hr-agent',
+    agent: 'agent_hr',
     sensitivity: 4
   },
   {
@@ -192,7 +192,7 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['company policy', 'employee handbook', 'guidelines', 'rules'],
     related: ['intent:HR_BENEFITS'],
     requiresContext: false,
-    agent: 'hr-agent',
+    agent: 'agent_hr',
     sensitivity: 1
   },
   {
@@ -204,7 +204,7 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['new employee', 'onboarding', 'first day', 'getting started'],
     related: ['intent:HR_POLICIES', 'intent:IT_SETUP'],
     requiresContext: false,
-    agent: 'hr-agent',
+    agent: 'agent_hr',
     sensitivity: 1
   },
 
@@ -336,7 +336,7 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['help', 'question', 'how do i'],
     related: [],
     requiresContext: false,
-    agent: 'fallback',
+    agent: 'agent_fallback',
     sensitivity: 1
   }
 ];
