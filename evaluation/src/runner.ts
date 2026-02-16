@@ -1,7 +1,7 @@
 /**
  * EdgeNeuro Evaluation Runner
  * 
- * Tests the SynapseCore router with synthetic scenarios
+ * Tests the SynapseCore router with Knowledge Graph intent taxonomy
  */
 
 import { scenarios, TestScenario } from './scenarios';

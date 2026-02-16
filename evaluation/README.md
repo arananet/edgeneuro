@@ -91,8 +91,8 @@ If no explicit permission exists → DENIED. This is more secure than "allow by 
 
 ### Phase 1: Baseline Metrics
 - [ ] Set up test agents (HR, IT, SQL)
-- [ ] Create synthetic test dataset (100+ scenarios)
-- [ ] Measure intent detection accuracy
+- [ ] Test Knowledge Graph intent taxonomy accuracy
+- [ ] Measure intent detection latency
 - [ ] Measure end-to-end latency
 
 ### Phase 2: Stress Testing

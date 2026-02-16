@@ -21,11 +21,9 @@ Current EdgeNeuro is mostly System 1 (LLM-based intent detection). Neuro-symboli
 
 | Approach | Description |适合 EdgeNeuro? |
 |----------|-------------|----------------|
-| **Symbolic[Neural]** | Neural evaluates symbolic (e.g., AlphaGo MCTS + NN) | ⭐⭐⭐ Best fit |
-| **Neural: Symbolic→** | Symbolic generates training data for neural | ⭐⭐ Useful |
-| **Neural[Symbolic]** | True symbolic reasoning embedded in NN | ⭐ Complex |
-| **Neural\|Symbolic** | Neural interprets → symbolic reasons | ⭐⭐ Good |
-| **Symbolic[Neural]** | Symbolic invokes neural (current LLM approach) | Already done |
+| **Symbolic (KG)** | Knowledge Graph for intent taxonomy | ✅ IMPLEMENTED |
+| **Neural Validation** | LLM validates/confirms intent (optional) | ✅ IMPLEMENTED |
+| **Simple Access** | Role-based category access control | ✅ IMPLEMENTED |
 
 ---
 
