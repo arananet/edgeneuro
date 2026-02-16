@@ -164,18 +164,18 @@ export default function Settings() {
 
   // Load current model and fetch available models on mount
   useEffect(() => {
-    // Load current model config from worker
-    fetch(`${ORCHESTRATOR_URL}/v1/config/model`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.model_id) {
-          setSelectedModel(data.model_id)
-        }
-      })
-      .catch(() => {})
-
-    // Fetch available models from worker (need them to populate dropdown properly)
-    fetchModels()
+    // First fetch models, then load saved config
+    fetchModels().then(() => {
+      // After models are loaded, get the saved config
+      fetch(`${ORCHESTRATOR_URL}/v1/config/model`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.model_id) {
+            setSelectedModel(data.model_id)
+          }
+        })
+        .catch(() => {})
+    })
   }, [])
 
   const handleModelSelect = (modelId: string) => {
