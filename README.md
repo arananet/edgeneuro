@@ -168,74 +168,88 @@ flowchart TD
 - **Predictable:** Every decision is traceable and auditable
 - **No Ambiguity:** No "maybe" - explicit allow or deny
 
-### Neuro-Symbolic: The Correct Architecture
+### Neuro-Symbolic: The TRUE Architecture
 
 ```mermaid
 flowchart TD
-    Q[User Query] --> S1[SYMBOLIC: Intent Detection]
-    S1 -->|Knowledge Graph Taxonomy| I[Intent: IT_VPN]
-    I --> N[NEURAL: LLM Validation]
-    N -->|Optional, low confidence| A[SIMPLE: Role-Based Access]
-    A --> D{Allowed?}
-    D -->|Yes| R[Route to Agent]
-    D -->|No| E[Denied + Alternatives]
+    Q[User Query] --> S1[SYMBOLIC: KG Intent Detection]
+    S1 -->|Find matching intents| I{Intent Found?}
+    I -->|Yes, confidence > 0.5| S2[SYMBOLIC: KG Access Control]
+    I -->|No, confidence < 0.5| N[NEURAL: LLM Validation]
+    N --> S2
+    S2 -->|Check role → topic| D{Access ALLOW?}
+    D -->|ALLOW| R[Route to Agent]
+    D -->|DENY| E[403 Denied + Alternatives]
     
     style S1 fill:#98FB98
+    style S2 fill:#98FB98
     style N fill:#87CEEB
-    style A fill:#FFE4B5
+    style D fill:#FFE4B5
 ```
 
-| Layer | Component | Purpose |
-|-------|-----------|---------|
-| **Symbolic** | Knowledge Graph Intent Taxonomy | Detect intent using explicit rules |
-| **Neural** | LLM (Llama-3) | Validate/confirm intent (optional) |
-| **Simple** | Role-Based Access Control | Check if role can access category |
+**TRUE Neuro-Symbolic Flow:**
+1. **SYMBOLIC (Primary)**: Knowledge Graph finds intent by keywords → returns topic + confidence
+2. **NEURAL (Fallback)**: LLM validates intent only if KG confidence < 0.5
+3. **SYMBOLIC (Access)**: Knowledge Graph evaluates role → topic permissions (DEFAULT DENY)
+4. **ROUTE** only if access ALLOWED
 
-### How It Works
+| Layer | Component | Purpose | When |
+|-------|-----------|---------|-------|
+| **Symbolic** | KG Intent Detection | Find intent by keywords | ALWAYS (primary) |
+| **Neural** | LLM (Llama-3) | Validate intent | Only if KG confidence < 0.5 |
+| **Symbolic** | KG Access Control | Default Deny policy | ALWAYS |
+
+### How It Works (TRUE Neuro-Symbolic)
 
 1. **User Query** → Sent to SynapseCore
-2. **SYMBOLIC** → Knowledge Graph matches keywords → Intent (e.g., "IT_VPN")
-3. **NEURAL** → LLM validates intent (only if confidence < 90%)
-4. **SIMPLE** → Role-based category access check
-5. **Decision** → Route to agent OR Deny with alternatives
+2. **SYMBOLIC** → KG finds intent by keywords (e.g., "vpn" → IT_VPN, confidence 0.9)
+3. **NEURAL** → LLM validates ONLY if KG confidence < 0.5
+4. **SYMBOLIC** → KG evaluates role → topic access (DEFAULT DENY)
+5. **Decision** → Route to agent if ALLOW, 403 + alternatives if DENY
 
-### 🕸️ Knowledge Graph (Symbolic Intent Taxonomy)
+### 🕸️ Knowledge Graph (Symbolic Intent + Access)
 
 ```mermaid
 flowchart LR
-    subgraph User
-        U[User]
+    subgraph Query
+        Q[User Query]
     end
     
-    subgraph Attributes
-        A1[HAS_ROLE]
-        A2[HAS_SESSION]
-        A3[VALID_TICKET]
+    subgraph Intent_Layer
+        I[INTENT]
+        K[keywords]
     end
     
-    subgraph Entity
+    subgraph Access_Layer
         R[ROLE]
-        C[CAPABILITY]
-    end
-    
-    subgraph Resource
         T[TOPIC]
     end
     
-    U --> A1
-    U --> A2
-    U --> A3
+    subgraph Agent_Layer
+        A[AGENT]
+    end
     
-    A1 --> R
+    Q -->|matches| I
+    I -->|MAPS_TO| T
+    I -->|ROUTES_TO| A
     R -->|CAN_ACCESS| T
-    A2 --> C
-    C -->|ENABLES| T
-    A3 --> C
     
+    style I fill:#98FB98
     style T fill:#E6E6FA
     style R fill:#FFE4B5
-    style C fill:#98FB98
+    style A fill:#87CEEB
 ```
+
+**Node Types:**
+- **INTENT** - Intent definitions with keywords (e.g., "vpn" → IT_VPN)
+- **ROLE** - User roles (EMPLOYEE, IT_ADMIN, HR_ADMIN, etc.)
+- **TOPIC** - Resources (IT_TICKETS, PAYROLL, BENEFITS, etc.)
+- **AGENT** - Target agents (agent_it, agent_hr, etc.)
+
+**Edge Types:**
+- INTENT → TOPIC (MAPS_TO)
+- INTENT → AGENT (ROUTES_TO)
+- ROLE → TOPIC (CAN_ACCESS)
 
 **Knowledge Graph Features:**
 - **Node Types:** USER, ROLE, **CAPABILITY**, GROUP, TOPIC, AGENT, RULE
