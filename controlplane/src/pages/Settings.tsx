@@ -174,7 +174,7 @@ export default function Settings() {
       })
       .catch(() => {})
 
-    // Fetch available models from worker
+    // Fetch available models from worker (need them to populate dropdown properly)
     fetchModels()
   }, [])
 
