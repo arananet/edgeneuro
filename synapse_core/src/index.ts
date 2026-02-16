@@ -443,10 +443,10 @@ export default {
     // =========================================================================
     // NEURO-SYMBOLIC INTENT DETECTION (NEW ARCHITECTURE)
     // =========================================================================
-    // 
-    // ARCH    // Step ITECTURE:
-1: SYMBOLIC Intent Detection (Knowledge Graph taxonomy)
-    // Step 2: NEURAL Validation (LLM confirms intent)  
+    //
+    // ARCHITECTURE:
+    // Step 1: SYMBOLIC Intent Detection (Knowledge Graph taxonomy)
+    // Step 2: NEURAL Validation (LLM confirms intent)
     // Step 3: SIMPLE Access Control (role-based)
     //
     // This is the CORRECT architecture: Neuro-Symbolic for INTENT, Simple for Access
