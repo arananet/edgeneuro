@@ -716,31 +716,6 @@ export class KGAccessEngine {
     const caps = this.graph.getUserCapabilities(userId);
     return caps.map(c => c.name);
   }
-      
-      return {
-        decision: 'ALLOW',
-        reason: `Knowledge graph found path: ${result.explanation}`,
-        path,
-        topic: requestedTopic,
-        userRole,
-        alternatives: this.getAlternatives(userRole),
-        auditId,
-        graphReasoning: result.explanation
-      };
-    }
-    
-    // DEFAULT DENY - No path found in knowledge graph
-    return {
-      decision: 'DENY',
-      reason: `No explicit permission found in knowledge graph. ${result.explanation}`,
-      path: null,
-      topic: requestedTopic,
-      userRole,
-      alternatives: this.getAlternatives(userRole),
-      auditId,
-      graphReasoning: result.explanation
-    };
-  }
 
   /**
    * Get topics the role CAN access (for UX suggestions)
