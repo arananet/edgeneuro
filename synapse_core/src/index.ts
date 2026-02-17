@@ -130,23 +130,46 @@ async function neuroSymbolicRouting(
   }
 
   // =========================================================================
-  // STEP 2: NEURAL - LLM Intent Detection (FALLBACK)
+  // STEP 2: NEURAL - LLM Agent Resolution (FALLBACK)
   // =========================================================================
   // Only use LLM if KG didn't find a confident match
+  // Use LLM for: typo resolution, language understanding, agent mapping
   if (detectedIntent.confidence < 0.5 && env.AI && agents.length > 0) {
     const modelId = await getRoutingModel(env.DB);
     
+    // Build agent context for the prompt
+    const agentContext = agents.map((a: any) => {
+      const name = a.name?.toLowerCase() || a.id.toLowerCase();
+      let topics = 'general support';
+      if (name.includes('hr')) {
+        topics = 'vacations, time off, PTO, leave, holiday, payroll, benefits, hiring, onboarding, performance reviews, HR policies';
+      } else if (name.includes('it')) {
+        topics = 'IT tickets, password, login, VPN, network, hardware, printer, software, email, security';
+      }
+      return `- ${a.id}: handles ${topics}`;
+    }).join('\n');
+
     try {
       const response = await env.AI.run(modelId, {
         messages: [
           { 
             role: 'system', 
-            content: `You are an intent classifier. Classify the query into one of these topics:
-IT_TICKETS, IT_VPN, IT_HARDWARE, IT_SECURITY, IT_PASSWORD,
-PAYROLL, BENEFITS, VACATIONS, PERFORMANCE_REVIEWS, HIRING, ONBOARDING,
-SALES_REPORTS, CUSTOMER_DATA, PIPELINE, INVOICES, EXPENSES,
-MARKETING_CAMPAIGNS, ENGINEERING_WIKI, CODE_REPOS, GENERAL_SUPPORT.
-Reply with JSON: {"topic": "TOPIC", "confidence": 0.0-1.0}`
+            content: `You are a neuro-symbolic router. Your job is to:
+1. Resolve typos, leetspeak, or unclear text to known intents
+2. Map the resolved intent to the correct agent
+
+Available agents:
+${agentContext}
+
+Guidelines:
+- "v1c4t10ns" = "vacations" = agent_hr
+- "password" = "login" = agent_it  
+- "vpn" = "network" = agent_it
+- If unclear, respond with agent_fallback
+
+Reply with JSON:
+{"agent": "agent_id", "topic": "resolved_topic", "confidence": 0.0-1.0, "reasoning": "brief explanation"}
+NEVER respond with anything except valid JSON.`
           },
           { role: 'user', content: query }
         ]
@@ -156,11 +179,17 @@ Reply with JSON: {"topic": "TOPIC", "confidence": 0.0-1.0}`
         const jsonMatch = response.response.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
-          detectedIntent = {
-            topic: parsed.topic || 'GENERAL_SUPPORT',
-            confidence: parsed.confidence || 0.5,
-            method: 'llm'
-          };
+          if (parsed.agent && parsed.agent !== 'agent_fallback') {
+            // Find the agent in the registry
+            const matchedAgent = agents.find((a: any) => a.id === parsed.agent);
+            if (matchedAgent) {
+              detectedIntent = {
+                topic: parsed.topic || 'GENERAL_SUPPORT',
+                confidence: parsed.confidence || 0.7,
+                method: 'llm'
+              };
+            }
+          }
         }
       }
     } catch (e) {
