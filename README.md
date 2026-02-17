@@ -2,6 +2,9 @@
 
 An Agent Orchestration and Router with Intent Detection using LLM and Neuro Symbolic approach.
 
+**Developer:** Eduardo Arana  
+**Assistant:** Soda 🥤
+
 ![EdgeNeuro Logo](./docs/assets/logo.svg)
 
 > "The future is per-request ephemeral supervisors that spin up, route, and die. It's efficient." — *EdgeNeuro Philosophy*
