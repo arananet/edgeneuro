@@ -180,7 +180,12 @@ Reply with JSON: {"topic": "TOPIC", "confidence": 0.0-1.0}`
     groups: []
   };
   
-  const accessDecision = engine.evaluateAccess(detectedIntent.topic, userProfile);
+  // Normalize vacation-related topics to BENEFITS (KG only has BENEFITS)
+  const normalizedTopic = ['VACATIONS', 'VACATION', 'TIME_OFF', 'PTO', 'LEAVE', 'HOLIDAY'].includes(detectedIntent.topic)
+    ? 'BENEFITS'
+    : detectedIntent.topic;
+  
+  const accessDecision = engine.evaluateAccess(normalizedTopic, userProfile);
   
   // If DENY, return immediately with alternatives
   if (accessDecision.decision === 'DENY') {
@@ -210,10 +215,16 @@ Reply with JSON: {"topic": "TOPIC", "confidence": 0.0-1.0}`
       topicToAgent['PAYROLL'] = agent.id;
       topicToAgent['BENEFITS'] = agent.id;
       topicToAgent['VACATIONS'] = agent.id;
+      topicToAgent['VACATION'] = agent.id;
+      topicToAgent['TIME_OFF'] = agent.id;
+      topicToAgent['PTO'] = agent.id;
+      topicToAgent['LEAVE'] = agent.id;
+      topicToAgent['HOLIDAY'] = agent.id;
       topicToAgent['PERFORMANCE_REVIEWS'] = agent.id;
       topicToAgent['HIRING'] = agent.id;
       topicToAgent['ONBOARDING'] = agent.id;
       topicToAgent['HR_POLICIES'] = agent.id;
+      // Map all above to BENEFITS for access check
     }
     if (name.includes('it')) {
       topicToAgent['IT_TICKETS'] = agent.id;
@@ -225,7 +236,7 @@ Reply with JSON: {"topic": "TOPIC", "confidence": 0.0-1.0}`
   }
   topicToAgent['GENERAL_SUPPORT'] = 'agent_fallback';
   
-  const targetAgentId = topicToAgent[detectedIntent.topic] || 'agent_fallback';
+  const targetAgentId = topicToAgent[normalizedTopic] || topicToAgent[detectedIntent.topic] || 'agent_fallback';
   const targetAgent = agents.find((a: any) => a.id === targetAgentId);
   
   return {
