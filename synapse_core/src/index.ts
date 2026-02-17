@@ -199,10 +199,24 @@ NEVER respond with anything except valid JSON.`
               llm_agent: parsed.agent
             };
           }
+        } else {
+          // LLM returned non-JSON (refusal, error, etc.) - mark as failed llm
+          console.log('LLM returned non-JSON response, triggering symbolic fallback');
+          detectedIntent = {
+            topic: 'GENERAL_SUPPORT',
+            confidence: 0,
+            method: 'llm_failed'
+          };
         }
       }
     } catch (e) {
       console.log('LLM error:', e);
+      // Mark as llm_failed so symbolic fallback can handle
+      detectedIntent = {
+        topic: 'GENERAL_SUPPORT',
+        confidence: 0,
+        method: 'llm_failed'
+      };
     }
   }
 
@@ -211,7 +225,7 @@ NEVER respond with anything except valid JSON.`
   // =========================================================================
   // This is the neuro-symbolic guardrail: symbolic rules catch when neural fails
   const queryLower = query.toLowerCase();
-  if (detectedIntent.method === 'llm' && detectedIntent.topic === 'GENERAL_SUPPORT') {
+  if ((detectedIntent.method === 'llm' || detectedIntent.method === 'llm_failed') && detectedIntent.topic === 'GENERAL_SUPPORT') {
     // LLM couldn't resolve - use symbolic keyword fallback
     const symbolicFallbacks: Record<string, { topic: string; agent: string }> = {
       // IT keywords
