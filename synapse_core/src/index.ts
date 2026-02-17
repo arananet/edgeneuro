@@ -207,6 +207,54 @@ NEVER respond with anything except valid JSON.`
   }
 
   // =========================================================================
+  // STEP 2.5: SYMBOLIC FALLBACK - When LLM fails or returns unexpected
+  // =========================================================================
+  // This is the neuro-symbolic guardrail: symbolic rules catch when neural fails
+  const queryLower = query.toLowerCase();
+  if (detectedIntent.method === 'llm' && detectedIntent.topic === 'GENERAL_SUPPORT') {
+    // LLM couldn't resolve - use symbolic keyword fallback
+    const symbolicFallbacks: Record<string, { topic: string; agent: string }> = {
+      // IT keywords
+      'laptop': { topic: 'IT_HARDWARE', agent: 'agent_it' },
+      'computer': { topic: 'IT_HARDWARE', agent: 'agent_it' },
+      'l4pt0p': { topic: 'IT_HARDWARE', agent: 'agent_it' },
+      'keyboard': { topic: 'IT_HARDWARE', agent: 'agent_it' },
+      'mouse': { topic: 'IT_HARDWARE', agent: 'agent_it' },
+      'monitor': { topic: 'IT_HARDWARE', agent: 'agent_it' },
+      'printer': { topic: 'IT_HARDWARE', agent: 'agent_it' },
+      'password': { topic: 'IT_PASSWORD', agent: 'agent_it' },
+      'login': { topic: 'IT_PASSWORD', agent: 'agent_it' },
+      'vpn': { topic: 'IT_VPN', agent: 'agent_it' },
+      'network': { topic: 'IT_VPN', agent: 'agent_it' },
+      'wifi': { topic: 'IT_VPN', agent: 'agent_it' },
+      'email': { topic: 'IT_TICKETS', agent: 'agent_it' },
+      'software': { topic: 'IT_TICKETS', agent: 'agent_it' },
+      'install': { topic: 'IT_TICKETS', agent: 'agent_it' },
+      // HR keywords  
+      'vacation': { topic: 'BENEFITS', agent: 'agent_hr' },
+      'holiday': { topic: 'BENEFITS', agent: 'agent_hr' },
+      'pto': { topic: 'BENEFITS', agent: 'agent_hr' },
+      'leave': { topic: 'BENEFITS', agent: 'agent_hr' },
+      'payroll': { topic: 'PAYROLL', agent: 'agent_hr' },
+      'salary': { topic: 'PAYROLL', agent: 'agent_hr' },
+      'benefits': { topic: 'BENEFITS', agent: 'agent_hr' },
+      'hiring': { topic: 'HIRING', agent: 'agent_hr' },
+      'interview': { topic: 'HIRING', agent: 'agent_hr' },
+    };
+    
+    for (const [keyword, mapping] of Object.entries(symbolicFallbacks)) {
+      if (queryLower.includes(keyword)) {
+        detectedIntent = {
+          topic: mapping.topic,
+          confidence: 0.9,
+          method: 'symbolic_fallback'
+        };
+        break;
+      }
+    }
+  }
+
+  // =========================================================================
   // STEP 3: SYMBOLIC - Knowledge Graph Access Control
   // =========================================================================
   const engine = new SymbolicEngine();
