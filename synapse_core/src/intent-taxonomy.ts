@@ -208,7 +208,7 @@ export const INTENT_TAXONOMY: Intent[] = [
     sensitivity: 1
   },
 
-  // Sales Category
+  // Sales Category (routed to agent_data per spec-skill-003-data.md)
   {
     id: 'intent:SALES_REPORTS',
     name: 'Sales_Reports',
@@ -218,7 +218,7 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['sales report', 'revenue data', 'quota', 'pipeline'],
     related: ['intent:SALES_CUSTOMERS'],
     requiresContext: false,
-    agent: 'sql-agent',
+    agent: 'agent_data',
     sensitivity: 2
   },
   {
@@ -230,11 +230,11 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['customer data', 'accounts', 'client list', 'crm'],
     related: ['intent:SALES_REPORTS'],
     requiresContext: true,
-    agent: 'sql-agent',
+    agent: 'agent_data',
     sensitivity: 3
   },
 
-  // Finance Category
+  // Finance Category (routed to agent_hr - no separate finance-agent spec exists)
   {
     id: 'intent:FINANCE_EXPENSES',
     name: 'Finance_Expenses',
@@ -244,7 +244,7 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['expense report', 'submit expense', 'reimbursement'],
     related: ['intent:FINANCE_INVOICES'],
     requiresContext: false,
-    agent: 'finance-agent',
+    agent: 'agent_hr',
     sensitivity: 2
   },
   {
@@ -256,11 +256,11 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['invoice', 'billing', 'payment'],
     related: ['intent:FINANCE_EXPENSES'],
     requiresContext: true,
-    agent: 'finance-agent',
+    agent: 'agent_hr',
     sensitivity: 3
   },
 
-  // Engineering Category
+  // Engineering Category (routed to agent_it - no separate eng-agent spec exists)
   {
     id: 'intent:ENG_CODE',
     name: 'Eng_Code',
@@ -270,7 +270,7 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['code repo', 'git access', 'repository'],
     related: ['intent:ENG_INFRA'],
     requiresContext: false,
-    agent: 'eng-agent',
+    agent: 'agent_it',
     sensitivity: 2
   },
   {
@@ -282,11 +282,11 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['deploy', 'infrastructure', 'server', 'aws'],
     related: ['intent:ENG_CODE'],
     requiresContext: true,
-    agent: 'eng-agent',
+    agent: 'agent_it',
     sensitivity: 3
   },
 
-  // Marketing Category
+  // Marketing Category (routed to agent_hr - no separate marketing-agent spec exists)
   {
     id: 'intent:MKT_CAMPAIGNS',
     name: 'Mkt_Campaigns',
@@ -296,7 +296,7 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['marketing campaign', 'analytics', 'ad performance'],
     related: ['intent:MKT_ASSETS'],
     requiresContext: false,
-    agent: 'marketing-agent',
+    agent: 'agent_data',
     sensitivity: 2
   },
   {
@@ -308,11 +308,11 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['brand assets', 'logo', 'creative files'],
     related: ['intent:MKT_CAMPAIGNS'],
     requiresContext: false,
-    agent: 'marketing-agent',
+    agent: 'agent_hr',
     sensitivity: 1
   },
 
-  // Security
+  // Security (routed to agent_it per spec-skill-002-it.md)
   {
     id: 'intent:SECURITY',
     name: 'Security',
@@ -322,7 +322,7 @@ export const INTENT_TAXONOMY: Intent[] = [
     phrases: ['security issue', 'phishing', 'suspicious email', 'breach'],
     related: ['intent:IT_VPN'],
     requiresContext: false,
-    agent: 'security-agent',
+    agent: 'agent_it',
     sensitivity: 4
   },
 
@@ -504,13 +504,16 @@ export class SymbolicIntentDetector {
    * Check if agent matches role
    */
   private isAgentForRole(agent: string, role: string): boolean {
+    // Spec-compliant agent mapping (only agents with skill specs)
     const roleAgentMap: Record<string, string[]> = {
-      'IT': ['it-agent'],
-      'HR': ['hr-agent'],
-      'SALES': ['sql-agent'],
-      'FINANCE': ['finance-agent'],
-      'ENGINEERING': ['eng-agent'],
-      'MARKETING': ['marketing-agent']
+      'IT': ['agent_it'],
+      'HR': ['agent_hr'],
+      'SALES': ['agent_data'],
+      'FINANCE': ['agent_hr'],        // Rerouted - no finance-agent spec
+      'ENGINEERING': ['agent_it'],    // Rerouted - no eng-agent spec  
+      'MARKETING': ['agent_data', 'agent_hr'],  // Rerouted - no marketing-agent spec
+      'SECURITY': ['agent_it'],       // IT handles security per spec-skill-002
+      'GENERAL': ['agent_fallback']
     };
     
     return roleAgentMap[role]?.includes(agent) || false;

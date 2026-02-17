@@ -9,12 +9,13 @@
     "deploy:router": "cd synapse_core && npx wrangler deploy",
     "deploy:hr": "cd test-agents/hr-agent && npx wrangler deploy",
     "deploy:it": "cd test-agents/it-agent && npx wrangler deploy",
-    "deploy:all": "npm run deploy:router && npm run deploy:hr && npm run deploy:it",
+    "deploy:data": "cd test-agents/data-agent && npx wrangler deploy",
+    "deploy:all": "npm run deploy:router && npm run deploy:hr && npm run deploy:it && npm run deploy:data",
     "dev:router": "cd synapse_core && npx wrangler dev",
     "setup:poc": "bash scripts/poc-setup.sh"
   },
   "devDependencies": {
-    "wrangler": "^3.0.0",
+    "wrangler": "^4.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.0.0",

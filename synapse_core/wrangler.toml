@@ -12,12 +12,12 @@ ROUTING_MODEL = "@cf/meta/llama-3.2-1b-instruct"
 
 [[kv_namespaces]]
 binding = "AGENT_KV"
-id = "YOUR_KV_NAMESPACE_ID"
+id = "30132360c6984b01a9e165955b76ce78"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "edgeneuro-db"
-database_id = "YOUR_D1_ID"
+database_id = "88872e62-cff9-41e1-ad9c-6bae04771d65"
 
 [[durable_objects.bindings]]
 name = "SYNAPSE"

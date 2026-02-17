@@ -34,6 +34,8 @@ export interface ENTurn {
   }>;
 }
 
+export type ENAgentId = 'agent_hr' | 'agent_it' | 'agent_data';
+
 export interface ENScenario {
   id: string;
   title: string;
@@ -42,7 +44,7 @@ export interface ENScenario {
   turns: ENTurn[];
   tools_available: string[];
   difficulty: 'easy' | 'medium' | 'hard';
-  expected_agents: string[];
+  expected_agents: ENAgentId[];
   domain_context: string;
 }
 
@@ -72,7 +74,7 @@ export const en_scenarios: ENScenario[] = [
     ],
     tools_available: ['it.ProvisionLaptop', 'it.SetupEmail', 'hr.EnrollBenefits', 'it.RequestAccess'],
     difficulty: 'easy',
-    expected_agents: ['it-agent', 'hr-agent'],
+    expected_agents: ['agent_it', 'agent_hr'],
     domain_context: 'New employee needs multiple IT/HR setups'
   },
 
@@ -98,7 +100,7 @@ export const en_scenarios: ENScenario[] = [
     ],
     tools_available: ['it.DiagnoseVPN', 'sql.QueryReports', 'hr.SubmitExpense'],
     difficulty: 'hard',
-    expected_agents: ['it-agent', 'sql-agent', 'hr-agent'],
+    expected_agents: ['agent_it', 'agent_data', 'agent_hr'],
     domain_context: 'Multi-domain issue requiring agent coordination'
   },
 
@@ -122,7 +124,7 @@ export const en_scenarios: ENScenario[] = [
     ],
     tools_available: ['sql.QuerySales', 'sql.Calculate', 'sql.Export'],
     difficulty: 'medium',
-    expected_agents: ['sql-agent'],
+    expected_agents: ['agent_data'],
     domain_context: 'Complex SQL query with calculations'
   }
 ];
@@ -159,7 +161,7 @@ export const additional_scenarios: ENScenario[] = [
     ],
     tools_available: ['it.ReportIncident', 'it.CheckCompromise', 'it.ResetPasswords', 'it.LogIncident'],
     difficulty: 'hard',
-    expected_agents: ['it-agent'],
+    expected_agents: ['agent_it'],
     domain_context: 'Security incident requiring immediate action'
   },
 
@@ -184,7 +186,7 @@ export const additional_scenarios: ENScenario[] = [
     ],
     tools_available: ['sql.QueryMetrics', 'hr.GetPTOBalances', 'hr.ScheduleMeetings', 'sql.GenerateBonus'],
     difficulty: 'medium',
-    expected_agents: ['sql-agent', 'hr-agent'],
+    expected_agents: ['agent_data', 'agent_hr'],
     domain_context: 'Multi-domain manager task'
   },
 
@@ -208,7 +210,7 @@ export const additional_scenarios: ENScenario[] = [
     ],
     tools_available: ['it.ProvisionTempAccess', 'hr.NDASigning', 'hr.PaymentSetup'],
     difficulty: 'easy',
-    expected_agents: ['it-agent', 'hr-agent'],
+    expected_agents: ['agent_it', 'agent_hr'],
     domain_context: 'Simple multi-agent flow'
   },
 
@@ -234,7 +236,7 @@ export const additional_scenarios: ENScenario[] = [
     ],
     tools_available: ['it.CheckServerStatus', 'it.NotifyStakeholders', 'sql.QueryIncidents', 'it.UpdateStatus', 'it.Escalate'],
     difficulty: 'hard',
-    expected_agents: ['it-agent', 'sql-agent'],
+    expected_agents: ['agent_it', 'agent_data'],
     domain_context: 'Emergency response with multiple steps'
   },
 
@@ -260,7 +262,7 @@ export const additional_scenarios: ENScenario[] = [
     ],
     tools_available: ['sql.QuerySales', 'sql.CalculateBonus', 'sql.CheckPipeline', 'hr.ScheduleMeeting', 'sql.CommissionReport'],
     difficulty: 'hard',
-    expected_agents: ['sql-agent', 'hr-agent'],
+    expected_agents: ['agent_data', 'agent_hr'],
     domain_context: 'Heavy data analysis with meeting prep'
   },
 
@@ -285,7 +287,7 @@ export const additional_scenarios: ENScenario[] = [
     ],
     tools_available: ['hr.CheckBalance', 'hr.RequestLeave', 'it.SetOOO', 'hr.DelegateTasks'],
     difficulty: 'medium',
-    expected_agents: ['hr-agent', 'it-agent'],
+    expected_agents: ['agent_hr', 'agent_it'],
     domain_context: 'Cross-domain leave management'
   },
 
@@ -310,7 +312,7 @@ export const additional_scenarios: ENScenario[] = [
     ],
     tools_available: ['it.ReportDamage', 'it.RequestReplacement', 'it.BackupData', 'it.TransferLicenses'],
     difficulty: 'medium',
-    expected_agents: ['it-agent'],
+    expected_agents: ['agent_it'],
     domain_context: 'Urgent hardware issue with data recovery'
   }
 ];

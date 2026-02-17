@@ -333,6 +333,14 @@ NEVER respond with anything except valid JSON.`
       topicToAgent['IT_SECURITY'] = agent.id;
       topicToAgent['IT_PASSWORD'] = agent.id;
     }
+    if (name.includes('data')) {
+      topicToAgent['SALES_REPORTS'] = agent.id;
+      topicToAgent['CUSTOMER_DATA'] = agent.id;
+      topicToAgent['PIPELINE'] = agent.id;
+      topicToAgent['DATA_QUERY'] = agent.id;
+      topicToAgent['FINANCE_DASHBOARD'] = agent.id;
+      topicToAgent['MARKETING_ANALYTICS'] = agent.id;
+    }
   }
   topicToAgent['GENERAL_SUPPORT'] = 'agent_fallback';
   

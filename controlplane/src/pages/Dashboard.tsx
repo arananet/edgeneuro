@@ -5,11 +5,12 @@ interface HealthStatus {
   bindings: { kv: boolean; ai: boolean; synapse: boolean }
 }
 
+// Use environment variable with fallback for development
+const ORCHESTRATOR_URL = import.meta.env.VITE_ORCHESTRATOR_URL || 'https://edgeneuro-synapse-core.info-693.workers.dev'
+
 export default function Dashboard() {
   const [health, setHealth] = useState<HealthStatus | null>(null)
   const [loading, setLoading] = useState(true)
-
-  const ORCHESTRATOR_URL = 'https://edgeneuro-synapse-core.info-693.workers.dev'
 
   useEffect(() => {
     fetch(`${ORCHESTRATOR_URL}/health`)

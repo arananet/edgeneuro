@@ -7,7 +7,7 @@ export interface AgentProfile {
   intent_triggers?: string[];
   capabilities?: string[];
   connection: {
-    protocol: 'websocket' | 'http' | 'a2a';
+    protocol: 'websocket' | 'http' | 'a2a' | 'streamable-http';
     url: string;
     auth_strategy: 'oauth2' | 'mtls' | 'bearer' | 'api_key' | 'none';
   };
