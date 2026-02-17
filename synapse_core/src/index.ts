@@ -177,23 +177,32 @@ NEVER respond with anything except valid JSON.`
 
       if (response.response) {
         const jsonMatch = response.response.match(/\{[\s\S]*\}/);
+        console.log('LLM raw response:', response.response);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.agent && parsed.agent !== 'agent_fallback') {
-            // Find the agent in the registry
-            const matchedAgent = agents.find((a: any) => a.id === parsed.agent);
-            if (matchedAgent) {
-              detectedIntent = {
-                topic: parsed.topic || 'GENERAL_SUPPORT',
-                confidence: parsed.confidence || 0.7,
-                method: 'llm'
-              };
-            }
+          console.log('LLM parsed:', JSON.stringify(parsed));
+          // Use LLM result if agent is in available agents
+          const matchedAgent = agents.find((a: any) => a.id === parsed.agent);
+          if (matchedAgent) {
+            detectedIntent = {
+              topic: parsed.topic || 'GENERAL_SUPPORT',
+              confidence: parsed.confidence || 0.7,
+              method: 'llm',
+              llm_agent: parsed.agent
+            };
+          } else if (parsed.agent) {
+            // Agent not in list - default to fallback but mark as LLM
+            detectedIntent = {
+              topic: parsed.topic || 'GENERAL_SUPPORT',
+              confidence: 0.5,
+              method: 'llm',
+              llm_agent: parsed.agent
+            };
           }
         }
       }
     } catch (e) {
-      // LLM failed, keep KG result
+      console.log('LLM error:', e);
     }
   }
 
@@ -265,7 +274,9 @@ NEVER respond with anything except valid JSON.`
   }
   topicToAgent['GENERAL_SUPPORT'] = 'agent_fallback';
   
-  const targetAgentId = topicToAgent[normalizedTopic] || topicToAgent[detectedIntent.topic] || 'agent_fallback';
+  // Use LLM-suggested agent if available, otherwise fall back to topic mapping
+  const llmSuggestedAgent = (detectedIntent as any).llm_agent;
+  const targetAgentId = llmSuggestedAgent || topicToAgent[normalizedTopic] || topicToAgent[detectedIntent.topic] || 'agent_fallback';
   const targetAgent = agents.find((a: any) => a.id === targetAgentId);
   
   return {
