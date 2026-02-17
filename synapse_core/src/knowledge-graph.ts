@@ -280,6 +280,7 @@ export class KnowledgeGraph {
       { role: 'role:EMPLOYEE', topic: 'topic:HR_POLICIES', level: 'READ' },
       { role: 'role:EMPLOYEE', topic: 'topic:COMPANY_DIRECTORY', level: 'READ' },
       { role: 'role:EMPLOYEE', topic: 'topic:GENERAL_SUPPORT', level: 'READ' },
+      { role: 'role:EMPLOYEE', topic: 'topic:BENEFITS', level: 'READ' },
       
       { role: 'role:CONTRACTOR', topic: 'topic:GENERAL_SUPPORT', level: 'READ' },
       
@@ -431,8 +432,9 @@ export class KnowledgeGraph {
         const agentEdges = this.getOutEdges(intent.id).filter(e => e.type === 'ROUTES_TO');
         const agent = agentEdges[0]?.target?.replace('agent:', '') || 'agent_fallback';
         
-        // Confidence based on keyword coverage
-        const confidence = Math.min(matches / keywordList.length, 1.0);
+        // Confidence: deterministic - any keyword match = high confidence
+        // Avoids LLM fallback non-determinism
+        const confidence = matches > 0 ? 0.8 : 0.0;
         
         results.push({ intent, topic, agent, confidence });
       }
