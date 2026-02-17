@@ -143,7 +143,7 @@ async function neuroSymbolicRouting(
             role: 'system', 
             content: `You are an intent classifier. Classify the query into one of these topics:
 IT_TICKETS, IT_VPN, IT_HARDWARE, IT_SECURITY, IT_PASSWORD,
-PAYROLL, BENEFITS, PERFORMANCE_REVIEWS, HIRING, ONBOARDING,
+PAYROLL, BENEFITS, VACATIONS, PERFORMANCE_REVIEWS, HIRING, ONBOARDING,
 SALES_REPORTS, CUSTOMER_DATA, PIPELINE, INVOICES, EXPENSES,
 MARKETING_CAMPAIGNS, ENGINEERING_WIKI, CODE_REPOS, GENERAL_SUPPORT.
 Reply with JSON: {"topic": "TOPIC", "confidence": 0.0-1.0}`
@@ -209,9 +209,11 @@ Reply with JSON: {"topic": "TOPIC", "confidence": 0.0-1.0}`
     if (name.includes('hr')) {
       topicToAgent['PAYROLL'] = agent.id;
       topicToAgent['BENEFITS'] = agent.id;
+      topicToAgent['VACATIONS'] = agent.id;
       topicToAgent['PERFORMANCE_REVIEWS'] = agent.id;
       topicToAgent['HIRING'] = agent.id;
       topicToAgent['ONBOARDING'] = agent.id;
+      topicToAgent['HR_POLICIES'] = agent.id;
     }
     if (name.includes('it')) {
       topicToAgent['IT_TICKETS'] = agent.id;
@@ -1176,7 +1178,7 @@ export default {
             messages: [
               { 
                 role: 'system', 
-                content: `You are an intent classifier. Classify the user query into one of these topics: PAYROLL, BENEFITS, PERFORMANCE_REVIEWS, FINANCE_DASHBOARD, BUDGET, EXPENSES, INVOICES, SALES_REPORTS, CUSTOMER_DATA, PIPELINE, IT_TICKETS, IT_HARDWARE, IT_VPN, IT_SECURITY, ENGINEERING_WIKI, CODE_REPOS, INFRASTRUCTURE, MARKETING_CAMPAIGNS, MARKETING_ANALYTICS, BRAND_ASSETS, HR_POLICIES, COMPANY_DIRECTORY, ANNOUNCEMENTS, ONBOARDING, ADMIN_PANEL, GENERAL_SUPPORT. Reply with JSON: {"topic": "TOPIC", "confidence": 0.0-1.0, "reasoning": "brief explanation"}` 
+                content: `You are an intent classifier. Classify the user query into one of these topics: PAYROLL, BENEFITS, VACATIONS, PERFORMANCE_REVIEWS, FINANCE_DASHBOARD, BUDGET, EXPENSES, INVOICES, SALES_REPORTS, CUSTOMER_DATA, PIPELINE, IT_TICKETS, IT_HARDWARE, IT_VPN, IT_SECURITY, ENGINEERING_WIKI, CODE_REPOS, INFRASTRUCTURE, MARKETING_CAMPAIGNS, MARKETING_ANALYTICS, BRAND_ASSETS, HR_POLICIES, COMPANY_DIRECTORY, ANNOUNCEMENTS, ONBOARDING, ADMIN_PANEL, GENERAL_SUPPORT. Reply with JSON: {"topic": "TOPIC", "confidence": 0.0-1.0, "reasoning": "brief explanation"}` 
               },
               { role: 'user', content: query }
             ]
