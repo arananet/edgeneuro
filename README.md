@@ -1,6 +1,6 @@
 # EdgeNeuro 🧠⚙️🎼
 
-**Enterprise-Grade Serverless Router & Orchestrator**
+An Agent Orchestration and Router with Intent Detection using LLM and Neuro Symbolic approach.
 
 ![EdgeNeuro Logo](./docs/assets/logo.svg)
 
